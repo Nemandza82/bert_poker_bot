@@ -3,67 +3,33 @@ import math
 import time
 import pandas as pd
 import numpy as np
+from acpc_dataset import AcpcDataset
+from poker_bert_models import BertPokerValueModel
 from datetime import datetime
-from transformers import BertTokenizer, BertModel
 from torch.optim import Adam
 from tqdm import tqdm
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+EPOCHS = 20
+LR = 1e-6
+TRAIN_ROWS = 10000000 # 10 miliona
+TEST_ROWS = 500000
 
 
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, df):
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
 
-        self.labels = [float(label) for label in df['score']]
-        self.texts = df['text']
-
-    def __len__(self):
-        return len(self.labels)
-
-    def get_batch_labels(self, idx):
-        # Fetch a batch of labels
-        #print(f"Getting labels: {idx}")
-        #print(self.labels[idx])
-        x = self.labels[idx]
-
-        return np.array(math.tanh(x))
-
-    def get_batch_texts(self, idx):
-        # Fetch a batch of inputs
-        text = self.texts[idx]
-        tokenized = tokenizer(text, padding='max_length', max_length = 512, truncation=True, return_tensors="pt")
-
-        #print(f"Getting texts {idx}")
-        #print(f"->{text}<-")
-        #print(tokenized)
-
-        return tokenized
-
-    def __getitem__(self, idx):
-
-        batch_texts = self.get_batch_texts(idx)
-        batch_y = self.get_batch_labels(idx)
-
-        return batch_texts, batch_y
+    # initialize the process group
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
 
-class BertClassifier(torch.nn.Module):
-    def __init__(self, dropout=0.5):
-        super(BertClassifier, self).__init__()
+def cleanup():
+    dist.destroy_process_group()
 
-        self.bert = BertModel.from_pretrained('bert-base-cased')
-        self.dropout = torch.nn.Dropout(dropout)
-        self.linear = torch.nn.Linear(768, 1)
-        self.tanh = torch.nn.Tanh()
 
-    def forward(self, input_id, mask):
-        _, pooled_output = self.bert(input_ids= input_id, attention_mask=mask,return_dict=False)
-        dropout_output = self.dropout(pooled_output)
-        linear_output = self.linear(dropout_output)
-        final_layer = self.tanh(linear_output)
-
-        return final_layer
+#def train_step(rank, world_size):
 
 
 def train(model, train_dataset, val_dataset, learning_rate, epochs, use_cuda, device):
@@ -75,7 +41,8 @@ def train(model, train_dataset, val_dataset, learning_rate, epochs, use_cuda, de
     optimizer = Adam(model.parameters(), lr= learning_rate)
 
     if use_cuda:
-        model = model.cuda()
+        #model = torch.nn.DataParallel(model, device_ids=[0, 1])
+        model.to(device)
         criterion = criterion.cuda()
 
     for epoch_num in range(epochs):
@@ -138,9 +105,8 @@ def train(model, train_dataset, val_dataset, learning_rate, epochs, use_cuda, de
                 | Val Accuracy: {total_acc_val / len(val_dataset): .3f}')
 
 
-def evaluate(model, test_data, use_cuda, device):
+def evaluate(model, test, use_cuda, device):
 
-    test = Dataset(test_data)
     test_dataloader = torch.utils.data.DataLoader(test, batch_size=2)
 
     if use_cuda:
@@ -170,52 +136,41 @@ print(f"Dev count {torch.cuda.device_count()}")
 
 datetime_format = "%m-%d-%Y_%H:%M"
 use_cuda = torch.cuda.is_available()
-#use_cuda = True
-#use_cuda = False
 
 if use_cuda:
     print("Using CUDA!")
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:1")
     torch.cuda.set_device(device)
 else:
     print("Not using CUDA!")
     device = torch.device("cpu")
 
-train_rows = 10000000 # 10 miliona
-test_rows = 500000
-
 # Load dataset
 print("Loading training dataset")
-df_train = pd.read_csv("acpc_train.txt", sep=";", nrows=train_rows)
+df_train = pd.read_csv("data/acpc_train.txt", sep=";", nrows=TRAIN_ROWS)
 
 print("Loading val dataset")
-df_val = pd.read_csv("acpc_val.txt", sep=";", nrows=test_rows)
+df_val = pd.read_csv("data/acpc_val.txt", sep=";", nrows=TEST_ROWS)
 
 print("Loading test dataset")
-df_test = pd.read_csv("acpc_test.txt", sep=";", nrows=test_rows)
+df_test = pd.read_csv("data/acpc_test.txt", sep=";", nrows=TEST_ROWS)
 
 print(f"Traninig: {len(df_train)}, val: {len(df_val)}, test:{len(df_test)}")
 
 print(df_val)
 
 # Train the model
-EPOCHS = 20
-LR = 1e-5
-model = BertClassifier()
-
-model_path = "./models/bert_train_069_val_061.zip"
-print(f"Loading model from {model_path}")
-model.load_state_dict(torch.load(model_path))
-model.eval()
+model = BertPokerValueModel()
+model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
 
 do_train = True
 
 if do_train:
     print("Creating training Dataset object")
-    train_dataset = Dataset(df_train)
+    train_dataset = AcpcDataset(df_train, model.get_tokenizer())
     
     print("Creating validation Dataset object")
-    val_dataset = Dataset(df_val)
+    val_dataset = AcpcDataset(df_val, model.get_tokenizer())
 
     print("Started training process")
     train(model, train_dataset, val_dataset, LR, EPOCHS, use_cuda, device)
@@ -228,4 +183,5 @@ if do_train:
     torch.save(model.state_dict(), model_name)
 
 # Evaluate model
-evaluate(model, df_test, use_cuda, device)
+test = AcpcDataset(df_test, model.get_tokenizer())
+evaluate(model, test, use_cuda, device)
