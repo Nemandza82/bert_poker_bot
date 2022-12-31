@@ -1,10 +1,14 @@
 import torch
-import numpy as np
 import math
+import numpy as np
+import pandas as pd
 
 
 class AcpcDataset(torch.utils.data.Dataset):
-    def __init__(self, df, tokenizer):
+    def __init__(self, path, skip_rows, nrows, tokenizer):
+
+        print(f"Loading {path} dataset")
+        df = pd.read_csv(path, sep=";", skiprows=skip_rows, nrows=nrows)
 
         self.tokenizer = tokenizer
         self.labels = [float(label) for label in df['score']]

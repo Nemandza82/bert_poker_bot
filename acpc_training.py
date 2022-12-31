@@ -1,7 +1,6 @@
 import torch
 import math
 import time
-import pandas as pd
 import numpy as np
 from acpc_dataset import AcpcDataset
 from poker_bert_models import BertPokerValueModel
@@ -32,9 +31,12 @@ def cleanup():
 #def train_step(rank, world_size):
 
 
-def train(model, train_dataset, val_dataset, learning_rate, epochs, use_cuda, device):
+def train(model, train_dataset_path, val_dataset_path, learning_rate, epochs, use_cuda, device):
 
+    train_dataset = AcpcDataset(train_dataset_path, 0, TRAIN_ROWS, model.get_tokenizer())
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True)
+
+    val_dataset = AcpcDataset(val_dataset_path, 0, TEST_ROWS, model.get_tokenizer())
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=4)
 
     criterion = torch.nn.MSELoss()
@@ -145,20 +147,6 @@ else:
     print("Not using CUDA!")
     device = torch.device("cpu")
 
-# Load dataset
-print("Loading training dataset")
-df_train = pd.read_csv("data/acpc_train.txt", sep=";", nrows=TRAIN_ROWS)
-
-print("Loading val dataset")
-df_val = pd.read_csv("data/acpc_val.txt", sep=";", nrows=TEST_ROWS)
-
-print("Loading test dataset")
-df_test = pd.read_csv("data/acpc_test.txt", sep=";", nrows=TEST_ROWS)
-
-print(f"Traninig: {len(df_train)}, val: {len(df_val)}, test:{len(df_test)}")
-
-print(df_val)
-
 # Train the model
 model = BertPokerValueModel()
 model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
@@ -166,14 +154,9 @@ model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
 do_train = True
 
 if do_train:
-    print("Creating training Dataset object")
-    train_dataset = AcpcDataset(df_train, model.get_tokenizer())
-    
-    print("Creating validation Dataset object")
-    val_dataset = AcpcDataset(df_val, model.get_tokenizer())
 
     print("Started training process")
-    train(model, train_dataset, val_dataset, LR, EPOCHS, use_cuda, device)
+    train(model, "data/acpc_train.txt", "data/acpc_val.txt", LR, EPOCHS, use_cuda, device)
 
     # Save model
     date = datetime.now().strftime(datetime_format)
@@ -183,5 +166,5 @@ if do_train:
     torch.save(model.state_dict(), model_name)
 
 # Evaluate model
-test = AcpcDataset(df_test, model.get_tokenizer())
+test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, model.get_tokenizer())
 evaluate(model, test, use_cuda, device)
