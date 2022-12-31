@@ -10,11 +10,12 @@ action_fold = "folds"
 player_small_blind = "Small Blind"
 player_big_blind = "Big Blind"
 
+
 def parse_card(card_str):
     assert len(card_str) == 2
     rank = ""
     suite = ""
-    
+
     if card_str[0] == "2":
         rank = "Two"
     elif card_str[0] == "3":
@@ -59,7 +60,7 @@ def parse_cards(cards_str):
     cards = []
 
     while i < len(cards_str):
-        card = parse_card(cards_str[i:i+2])
+        card = parse_card(cards_str[i : i + 2])
 
         cards.append(card)
         i += 2
@@ -73,12 +74,12 @@ def parse_actions(street_actions_string):
 
     while i < len(street_actions_string):
         if street_actions_string[i] == "f":
-            street_actions.append({ "type": action_fold })
+            street_actions.append({"type": action_fold})
             i += 1
             continue
 
         if street_actions_string[i] == "c":
-            street_actions.append({ "type": action_cc })
+            street_actions.append({"type": action_cc})
             i += 1
             continue
 
@@ -91,17 +92,17 @@ def parse_actions(street_actions_string):
 
             r_amount = street_actions_string[r_start:i]
 
-            amount = round(float(r_amount)/small_blind_size, 2)
-            street_actions.append({ "type": action_raise, "amount": amount })
+            amount = round(float(r_amount) / small_blind_size, 2)
+            street_actions.append({"type": action_raise, "amount": amount})
             continue
-        
+
     return street_actions
 
 
 def get_player(street, action):
     action = action % 2
 
-    if street == 0:    
+    if street == 0:
         return player_small_blind if action == 0 else player_big_blind
     else:
         return player_small_blind if action == 1 else player_big_blind
@@ -126,13 +127,12 @@ def print_cards(cards):
 
 # STATE:4:r200c/cc/r466c/cr1219f:KdJd|7sAs/JcTs7c/Ah/4d:-466|466:Hero|Villian
 # Money is mormalized so that sb is 1
-class Hand():
-
+class Hand:
     def __init__(self, line):
         self.valid = True
         self.actions = []
 
-        #print(f"Parsing {line}")
+        # print(f"Parsing {line}")
         spliited = line.split(":")
 
         try:
@@ -143,7 +143,7 @@ class Hand():
                 street_actions = parse_actions(street_actions_string)
                 self.actions.append(street_actions)
 
-            #print(self.actions)
+            # print(self.actions)
 
             card_strings = spliited[3].split("/")
             hand_strings = card_strings[0].split("|")
@@ -154,8 +154,8 @@ class Hand():
             self.big_blind_cards = parse_cards(hand_strings[0])
             self.small_blind_cards = parse_cards(hand_strings[1])
 
-            #print(f"Big blind has: {self.big_blind_cards}")
-            #print(f"Small blind has: {self.small_blind_cards}")
+            # print(f"Big blind has: {self.big_blind_cards}")
+            # print(f"Small blind has: {self.small_blind_cards}")
 
             self.common_cards = []
             i = 1
@@ -164,14 +164,14 @@ class Hand():
                 self.common_cards.append(parse_cards(card_strings[i]))
                 i += 1
 
-            #print(f"Common cards {self.common_cards}")
+            # print(f"Common cards {self.common_cards}")
 
             results = spliited[4].split("|")
             self.big_blind_res = round(float(results[0]) / small_blind_size, 2)
             self.small_blind_res = round(float(results[1]) / small_blind_size)
 
-            #print(self.big_blind_res)
-            #print(self.small_blind_res)
+            # print(self.big_blind_res)
+            # print(self.small_blind_res)
 
         except:
             self.valid = False
@@ -198,7 +198,7 @@ class Hand():
         sb_pot = 1
         bb_pot = 2
         last_action_type = action_fold
-        
+
         while street <= max_street:
             if street > 0:
                 if street == 1:
@@ -208,7 +208,7 @@ class Hand():
                 elif street == 3:
                     text += "River is "
 
-                text += print_cards(self.common_cards[street-1])
+                text += print_cards(self.common_cards[street - 1])
                 text += ". "
 
             if street < max_street:
@@ -221,7 +221,7 @@ class Hand():
             while action_id <= max_action:
                 player = get_player(street, action_id)
                 last_action = self.actions[street][action_id]
-                last_action_type = last_action['type']
+                last_action_type = last_action["type"]
 
                 # update pots
                 if last_action_type == action_cc:
@@ -232,11 +232,11 @@ class Hand():
                 elif last_action_type == action_raise:
                     # It is raise to
                     if player == player_small_blind:
-                        sb_pot = last_action['amount']
+                        sb_pot = last_action["amount"]
                     else:
-                        bb_pot = last_action['amount']
+                        bb_pot = last_action["amount"]
 
-                #amount = "" if last_action_type != action_raise else last_action['amount']
+                # amount = "" if last_action_type != action_raise else last_action['amount']
 
                 text += f"{player} {last_action_type}. "
                 action_id += 1
@@ -246,7 +246,7 @@ class Hand():
         hero_pot = sb_pot if player == player_small_blind else bb_pot
 
         # We are learning how much hero pot is multiplied
-        hero_res = hero_res/hero_pot
+        hero_res = hero_res / hero_pot
 
         # Get in (-1, 1) range to be better for learning
         # (We are doing that now during training) -> Commented out
@@ -255,18 +255,17 @@ class Hand():
         # Round to two decimal places to take less space
         hero_res = round(hero_res, 2)
 
-        #print(f"{hero_res}, {text}")
-        #print(f"Player {player} pot: {hero_pot}")
+        # print(f"{hero_res}, {text}")
+        # print(f"Player {player} pot: {hero_pot}")
 
         # We are not learning what happens when someone folds (we know that)
         if last_action_type == action_fold:
             return None, None, None
 
-        #print(text)
-        #print(f"{hero} earns {hero_res}")
+        # print(text)
+        # print(f"{hero} earns {hero_res}")
 
         return hero_res, villian_cards, text
-            
 
     def print_hands(self):
         street = 0
@@ -276,13 +275,15 @@ class Hand():
             action_in_street = 0
 
             while action_in_street < len(self.actions[street]):
-                res, villian_cards, printed_hand = self.print_hand(street, action_in_street)
+                res, villian_cards, printed_hand = self.print_hand(
+                    street, action_in_street
+                )
 
                 if not res is None:
                     results.append((res, villian_cards, printed_hand))
 
                 action_in_street += 1
-            
+
             street += 1
 
         return results
@@ -322,9 +323,9 @@ def parse_acpc_file(filename, train_f, val_f, test_f):
 def convert_logs_to_dataset(root_folder):
     total_examples = 0
 
-    with open('acpc_train.txt', 'w') as train_f:
-        with open('acpc_val.txt', 'w') as val_f:
-            with open('acpc_test.txt', 'w') as test_f:
+    with open("acpc_train.txt", "w") as train_f:
+        with open("acpc_val.txt", "w") as val_f:
+            with open("acpc_test.txt", "w") as test_f:
                 train_f.write("score;villian_cards;text\n")
                 val_f.write("score;villian_cards;text\n")
                 test_f.write("score;villian_cards;text\n")
@@ -332,17 +333,18 @@ def convert_logs_to_dataset(root_folder):
                 for filename in os.listdir(root_folder):
                     if filename.endswith(".log"):
                         print(f"Parsing {root_folder}{filename} ")
-                        
-                        examples = parse_acpc_file(f"{root_folder}{filename}", train_f, val_f, test_f)
+
+                        examples = parse_acpc_file(
+                            f"{root_folder}{filename}", train_f, val_f, test_f
+                        )
                         total_examples += examples
-                        
+
                         print(f"Total examples {total_examples}")
-                        #print(filename)
+                        # print(filename)
 
                         if total_examples > 40000000:
                             break
 
 
-#parse_acpc_file("./data/acpc2017/PokerBot5.PokerCNN.1.0.log")
-convert_logs_to_dataset('./data/acpc2017/')
-
+# parse_acpc_file("./data/acpc2017/PokerBot5.PokerCNN.1.0.log")
+convert_logs_to_dataset("./data/acpc2017/")

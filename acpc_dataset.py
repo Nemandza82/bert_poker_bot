@@ -10,17 +10,20 @@ class AcpcDataset(torch.utils.data.Dataset):
         print(f"Loading {path} dataset")
         df = pd.read_csv(path, sep=";", skiprows=skip_rows, nrows=nrows)
 
+        print("Loaded csv")
+        print(df)
+
         self.tokenizer = tokenizer
-        self.labels = [float(label) for label in df['score']]
-        self.texts = df['text']
+        self.labels = [float(label) for label in df["score"]]
+        self.texts = df["text"]
 
     def __len__(self):
         return len(self.labels)
 
     def get_batch_labels(self, idx):
         # Fetch a batch of labels
-        #print(f"Getting labels: {idx}")
-        #print(self.labels[idx])
+        # print(f"Getting labels: {idx}")
+        # print(self.labels[idx])
         x = self.labels[idx]
 
         return np.array(math.tanh(x))
@@ -28,11 +31,17 @@ class AcpcDataset(torch.utils.data.Dataset):
     def get_batch_texts(self, idx):
         # Fetch a batch of inputs
         text = self.texts[idx]
-        tokenized = self.tokenizer(text, padding='max_length', max_length = 512, truncation=True, return_tensors="pt")
+        tokenized = self.tokenizer(
+            text,
+            padding="max_length",
+            max_length=512,
+            truncation=True,
+            return_tensors="pt",
+        )
 
-        #print(f"Getting texts {idx}")
-        #print(f"->{text}<-")
-        #print(tokenized)
+        # print(f"Getting texts {idx}")
+        # print(f"->{text}<-")
+        # print(tokenized)
 
         return tokenized
 

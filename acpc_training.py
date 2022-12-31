@@ -1,170 +1,202 @@
 import torch
-import math
 import time
-import numpy as np
+import os
 from acpc_dataset import AcpcDataset
 from poker_bert_models import BertPokerValueModel
 from datetime import datetime
-from torch.optim import Adam
-from tqdm import tqdm
 from torch.nn.parallel import DistributedDataParallel as DDP
+from multiprocessing import freeze_support
 
 
 EPOCHS = 20
-LR = 1e-6
-TRAIN_ROWS = 10000000 # 10 miliona
-TEST_ROWS = 500000
+LEARNING_RATE = 1e-6
+# TRAIN_ROWS = 10000000 # 10 miliona
+# TEST_ROWS = 500000
+
+TRAIN_ROWS = 200
+TEST_ROWS = 40
 
 
 def setup(rank, world_size):
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12355"
 
     # initialize the process group
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    torch.distributed.init_process_group("gloo", rank=rank, world_size=world_size)
 
 
 def cleanup():
-    dist.destroy_process_group()
+    torch.distributed.destroy_process_group()
 
 
-#def train_step(rank, world_size):
+def forward_pass(model, input_data, correct_label, criterion, device):
+    correct_label = correct_label.to(device)
+    correct_label = correct_label.unsqueeze(1)
+
+    mask = input_data["attention_mask"].to(device)
+    input_id = input_data["input_ids"].squeeze(1).to(device)
+
+    output = model(input_id, mask)
+
+    if criterion is not None:
+        batch_loss = criterion(output, correct_label.float())
+    else:
+        batch_loss = 0
+
+    acc = (output * correct_label > 0).sum().item()
+    return batch_loss, acc
 
 
-def train(model, train_dataset_path, val_dataset_path, learning_rate, epochs, use_cuda, device):
+def train_step(rank, world_size, train_dataset, model):
 
-    train_dataset = AcpcDataset(train_dataset_path, 0, TRAIN_ROWS, model.get_tokenizer())
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True)
+    batch_size = 1
+    nsteps = (TRAIN_ROWS // world_size) // batch_size
+    skip_steps = rank * nsteps
+
+    print(f"Running training on rank {rank}. nstep {nsteps} skiprows {skip_steps}")
+
+    if world_size > 1:
+        setup(rank, world_size)
+
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=False
+    )
+
+    total_acc_train = 0
+    total_loss_train = 0
+
+    model.to(rank)
+
+    if world_size > 1:
+        print(f"Create DDP for rank {rank}")
+        ddp_model = DDP(model, device_ids=[rank])
+    else:
+        ddp_model = model
+
+    criterion = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(ddp_model.parameters(), lr=LEARNING_RATE)
+    step = 0
+
+    for train_input, train_label in train_dataloader:
+
+        if step >= skip_steps and step < skip_steps + nsteps:
+
+            print(f"Rank {rank} step {step} / {len(train_dataloader)}")
+
+            batch_loss, acc = forward_pass(
+                ddp_model, train_input, train_label, criterion, rank
+            )
+            total_loss_train += batch_loss.item()
+            total_acc_train += acc
+
+            ddp_model.zero_grad()
+            batch_loss.backward()
+            optimizer.step()
+
+        step += 1
+
+    if world_size > 1:
+        cleanup()
+
+
+def train(model, train_dataset_path, val_dataset_path, epochs, device):
 
     val_dataset = AcpcDataset(val_dataset_path, 0, TEST_ROWS, model.get_tokenizer())
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=4)
 
-    criterion = torch.nn.MSELoss()
-    optimizer = Adam(model.parameters(), lr= learning_rate)
+    world_size = torch.cuda.device_count()
 
-    if use_cuda:
-        #model = torch.nn.DataParallel(model, device_ids=[0, 1])
-        model.to(device)
-        criterion = criterion.cuda()
+    train_dataset = AcpcDataset(
+        train_dataset_path, 0, TRAIN_ROWS, model.get_tokenizer()
+    )
 
     for epoch_num in range(epochs):
 
-            total_acc_train = 0
-            total_loss_train = 0
+        if world_size > 1 and True:
+            torch.multiprocessing.spawn(
+                train_step,
+                args=(world_size, train_dataset, model),
+                nprocs=world_size,
+                join=True,
+            )
+        else:
+            train_step(0, 1, train_dataset, model)
 
-            for train_input, train_label in tqdm(train_dataloader):
+        # Save model
+        date = datetime.now().strftime(datetime_format)
+        model_name = f"./models/bert_{date}.zip"
 
-                train_label = train_label.to(device)
-                train_label = train_label.unsqueeze(1)
+        print(f"Saving model to {model_name}")
+        torch.save(model.state_dict(), model_name)
 
-                mask = train_input['attention_mask'].to(device)
-                input_id = train_input['input_ids'].squeeze(1).to(device)
+        model.to(device)
+        criterion = torch.nn.MSELoss()
 
-                output = model(input_id, mask)
-                
-                batch_loss = criterion(output, train_label.float())
-                total_loss_train += batch_loss.item()
+        total_loss_val = 0
+        total_acc_val = 0
 
-                acc = (output * train_label > 0).sum().item()
-                total_acc_train += acc
+        with torch.no_grad():
+            for val_input, val_label in val_dataloader:
 
-                model.zero_grad()
-                batch_loss.backward()
-                optimizer.step()
+                batch_loss, acc = forward_pass(
+                    model, val_input, val_label, criterion, device
+                )
 
-            # Save model
-            date = datetime.now().strftime(datetime_format)
-            model_name = f"./models/bert_{date}.zip"
+                total_loss_val += batch_loss.item()
+                total_acc_val += acc
 
-            print(f"Saving model to {model_name}")
-            torch.save(model.state_dict(), model_name)
-
-            total_loss_val = 0
-            total_acc_val = 0
-
-            with torch.no_grad():
-
-                for val_input, val_label in val_dataloader:
-
-                    val_label = val_label.to(device)
-                    val_label = val_label.unsqueeze(1)
-
-                    mask = val_input['attention_mask'].to(device)
-                    input_id = val_input['input_ids'].squeeze(1).to(device)
-
-                    output = model(input_id, mask)
-
-                    batch_loss = criterion(output, val_label.float())
-                    total_loss_val += batch_loss.item()
-
-                    acc = (output * val_label > 0).sum().item()
-                    total_acc_val += acc
-            
-            print(
-                f'Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / len(train_dataset): .3f} \
-                | Train Accuracy: {total_acc_train / len(train_dataset): .3f} \
-                | Val Loss: {total_loss_val / len(val_dataset): .3f} \
-                | Val Accuracy: {total_acc_val / len(val_dataset): .3f}')
+        print(
+            f"Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / len(train_dataset): .3f} \
+            | Train Accuracy: {total_acc_train / len(train_dataset): .3f} \
+            | Val Loss: {total_loss_val / len(val_dataset): .3f} \
+            | Val Accuracy: {total_acc_val / len(val_dataset): .3f}"
+        )
 
 
-def evaluate(model, test, use_cuda, device):
+def evaluate(model, test, device):
 
     test_dataloader = torch.utils.data.DataLoader(test, batch_size=2)
 
-    if use_cuda:
-        model = model.cuda()
-
+    model = model.to(device)
     total_acc_test = 0
 
     with torch.no_grad():
         for test_input, test_label in test_dataloader:
 
-              test_label = test_label.to(device)
-              test_label = test_label.unsqueeze(1)
+            batch_loss, acc = forward_pass(model, test_input, test_label, None, device)
 
-              mask = test_input['attention_mask'].to(device)
-              input_id = test_input['input_ids'].squeeze(1).to(device)
+            acc = (output * test_label > 0).sum().item()
+            total_acc_test += acc
 
-              output = model(input_id, mask)
-
-              acc = (output * test_label > 0).sum().item()
-              total_acc_test += acc
-    
-    print(f'Test Accuracy: {total_acc_test / len(test_data): .3f}')
+    print(f"Test Accuracy: {total_acc_test / len(test_data): .3f}")
 
 
-print(f"Cuda is available {torch.cuda.is_available()}")
-print(f"Dev count {torch.cuda.device_count()}")
+if __name__ == "__main__":
+    freeze_support()
 
-datetime_format = "%m-%d-%Y_%H:%M"
-use_cuda = torch.cuda.is_available()
+    print(f"Cuda is available {torch.cuda.is_available()}")
+    print(f"Dev count {torch.cuda.device_count()}")
 
-if use_cuda:
-    print("Using CUDA!")
-    device = torch.device("cuda:1")
-    torch.cuda.set_device(device)
-else:
-    print("Not using CUDA!")
-    device = torch.device("cpu")
+    datetime_format = "%m-%d-%Y_%H:%M"
 
-# Train the model
-model = BertPokerValueModel()
-model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
+    if torch.cuda.is_available():
+        print("Using CUDA!")
+        device = torch.device("cuda:0")
+        torch.cuda.set_device(device)
+    else:
+        print("Not using CUDA!")
+        device = torch.device("cpu")
 
-do_train = True
+    # Train the model
+    model = BertPokerValueModel()
+    model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
 
-if do_train:
+    do_train = True
 
-    print("Started training process")
-    train(model, "data/acpc_train.txt", "data/acpc_val.txt", LR, EPOCHS, use_cuda, device)
+    if do_train:
+        print("Started training process")
+        train(model, "data/acpc_train.txt", "data/acpc_val.txt", EPOCHS, device)
 
-    # Save model
-    date = datetime.now().strftime(datetime_format)
-    model_name = f"./models/bert_{date}.zip"
-
-    print(f"Saving model to {model_name}")
-    torch.save(model.state_dict(), model_name)
-
-# Evaluate model
-test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, model.get_tokenizer())
-evaluate(model, test, use_cuda, device)
+    # Evaluate model
+    test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, model.get_tokenizer())
+    evaluate(model, test, device)
