@@ -4,8 +4,9 @@ import os
 from acpc_dataset import AcpcDataset
 from poker_bert_models import BertPokerValueModel
 from datetime import datetime
-from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DistributedDataParallel
 from multiprocessing import freeze_support
+from transformers import BertTokenizer
 
 
 EPOCHS = 20
@@ -15,6 +16,9 @@ LEARNING_RATE = 1e-6
 
 TRAIN_ROWS = 200
 TEST_ROWS = 40
+
+
+tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
 
 def setup(rank, world_size):
@@ -53,6 +57,9 @@ def train_step(rank, world_size, train_dataset, model):
     nsteps = (TRAIN_ROWS // world_size) // batch_size
     skip_steps = rank * nsteps
 
+    torch.cuda.set_device(rank)
+    cpu_device = torch.device("cpu")
+
     print(f"Running training on rank {rank}. nstep {nsteps} skiprows {skip_steps}")
 
     if world_size > 1:
@@ -69,7 +76,8 @@ def train_step(rank, world_size, train_dataset, model):
 
     if world_size > 1:
         print(f"Create DDP for rank {rank}")
-        ddp_model = DDP(model, device_ids=[rank])
+        ddp_model = DistributedDataParallel(model, device_ids=[rank], gradient_as_bucket_view=True)
+        print(f"Created DDP for rank {rank}")
     else:
         ddp_model = model
 
@@ -99,20 +107,23 @@ def train_step(rank, world_size, train_dataset, model):
         cleanup()
 
 
-def train(model, train_dataset_path, val_dataset_path, epochs, device):
+def train(model, train_dataset_path, val_dataset_path, epochs):
 
-    val_dataset = AcpcDataset(val_dataset_path, 0, TEST_ROWS, model.get_tokenizer())
+    val_dataset = AcpcDataset(val_dataset_path, 0, TEST_ROWS, tokenizer)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=4)
 
     world_size = torch.cuda.device_count()
 
+    if world_size == 1:
+        device = torch.device("cuda:0")
+
     train_dataset = AcpcDataset(
-        train_dataset_path, 0, TRAIN_ROWS, model.get_tokenizer()
+        train_dataset_path, 0, TRAIN_ROWS, tokenizer
     )
 
     for epoch_num in range(epochs):
 
-        if world_size > 1 and True:
+        if world_size > 1:
             torch.multiprocessing.spawn(
                 train_step,
                 args=(world_size, train_dataset, model),
@@ -153,7 +164,12 @@ def train(model, train_dataset_path, val_dataset_path, epochs, device):
         )
 
 
-def evaluate(model, test, device):
+def evaluate(model, test):
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
 
     test_dataloader = torch.utils.data.DataLoader(test, batch_size=2)
 
@@ -179,14 +195,6 @@ if __name__ == "__main__":
 
     datetime_format = "%m-%d-%Y_%H:%M"
 
-    if torch.cuda.is_available():
-        print("Using CUDA!")
-        device = torch.device("cuda:0")
-        torch.cuda.set_device(device)
-    else:
-        print("Not using CUDA!")
-        device = torch.device("cpu")
-
     # Train the model
     model = BertPokerValueModel()
     model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
@@ -195,8 +203,8 @@ if __name__ == "__main__":
 
     if do_train:
         print("Started training process")
-        train(model, "data/acpc_train.txt", "data/acpc_val.txt", EPOCHS, device)
+        train(model, "data/acpc_train.txt", "data/acpc_val.txt", EPOCHS)
 
     # Evaluate model
-    test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, model.get_tokenizer())
-    evaluate(model, test, device)
+    test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, tokenizer)
+    evaluate(model, test)
