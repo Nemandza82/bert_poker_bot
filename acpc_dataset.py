@@ -7,11 +7,13 @@ import pandas as pd
 class AcpcDataset(torch.utils.data.Dataset):
     def __init__(self, path, skip_rows, nrows, tokenizer):
 
-        print(f"Loading {path} dataset")
-        df = pd.read_csv(path, sep=";", skiprows=skip_rows, nrows=nrows)
+        #print(f"Loading {path} dataset")
 
-        print("Loaded csv")
-        print(df)
+        skip_rows_list = list(range(1, skip_rows))
+        df = pd.read_csv(path, sep=";", skiprows=skip_rows_list, nrows=nrows)
+
+        #print(f"Loaded csv {path}")
+        #print(df)
 
         self.tokenizer = tokenizer
         self.labels = [float(label) for label in df["score"]]
