@@ -6,7 +6,7 @@ class BertPokerValueModel(torch.nn.Module):
     def __init__(self, dropout=0.5):
         super(BertPokerValueModel, self).__init__()
 
-        #self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
         self.bert = BertModel.from_pretrained("bert-base-cased")
         self.dropout = torch.nn.Dropout(dropout)
@@ -28,5 +28,5 @@ class BertPokerValueModel(torch.nn.Module):
         self.load_state_dict(torch.load(model_path))
         self.eval()
 
-    #def get_tokenizer(self):
-     #   return self.tokenizer
+    def get_tokenizer(self):
+        return self.tokenizer
