@@ -13,17 +13,14 @@ from statistics import mean
 DATETIME_FORMAT = "%m-%d-%Y_%H:%M"
 
 # EPOCHS = 20
-EPOCHS = 4
+EPOCHS = 1
 LEARNING_RATE = 1e-6
 
 TRAIN_ROWS = 10*1024*1024 # 10 miliona
 TEST_ROWS = 128*1024
 
-#TRAIN_ROWS = 256
-#TEST_ROWS = 64
-
-TRAIN_ROWS = 4*1024
-TEST_ROWS = 2*1024
+TRAIN_ROWS = 128*1024
+TEST_ROWS = 16*1024
 
 # At least 512 to get gain from parallelization
 BATCH_SIZE = 512
@@ -276,8 +273,6 @@ def evaluate(model, test):
         for test_input, test_label in test_dataloader:
 
             batch_loss, acc = forward_pass(model, test_input, test_label, None, device)
-
-            acc = (output * test_label > 0).sum().item()
             total_acc_test.append(acc)
 
     logger.info(f"Test Accuracy: {mean(total_acc_test): .3f}")
