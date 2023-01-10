@@ -11,8 +11,8 @@ from transformers import BertTokenizer
 
 EPOCHS = 20
 LEARNING_RATE = 1e-6
-# TRAIN_ROWS = 10000000 # 10 miliona
-# TEST_ROWS = 500000
+#TRAIN_ROWS = 10000000 # 10 miliona
+#TEST_ROWS = 500000
 
 TRAIN_ROWS = 200
 TEST_ROWS = 40
@@ -74,7 +74,7 @@ def train_step(rank, world_size, train_dataset, model):
 
     model.to(rank)
 
-    if world_size > 1:
+    if world_size > 1 and False:
         print(f"Create DDP for rank {rank}")
         ddp_model = DistributedDataParallel(model, device_ids=[rank], gradient_as_bucket_view=True)
         print(f"Created DDP for rank {rank}")
