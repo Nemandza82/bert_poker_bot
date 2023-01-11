@@ -12,22 +12,19 @@ from statistics import mean
 
 DATETIME_FORMAT = "%m-%d-%Y_%H:%M"
 
-# EPOCHS = 20
-EPOCHS = 1
+EPOCHS = 20
 LEARNING_RATE = 1e-6
 
 TRAIN_ROWS = 10*1024*1024 # 10 miliona
 TEST_ROWS = 128*1024
 
-TRAIN_ROWS = 128*1024
-TEST_ROWS = 16*1024
+TRAIN_ROWS = 2*1024*1024
+TEST_ROWS = 64*1024
 
 # At least 512 to get gain from parallelization
 BATCH_SIZE = 512
 MINI_BATCH_SIZE = 4
 
-
-#tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
 
 def forward_pass(model, input_data, correct_label, criterion, device):
@@ -242,7 +239,7 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
         total_acc_val = []
 
         with torch.no_grad():
-            for val_input, val_label in val_dataloader:
+            for val_input, val_label in tqdm(val_dataloader):
 
                 batch_loss, acc = forward_pass(
                     model, val_input, val_label, criterion, validation_dev
@@ -291,7 +288,8 @@ if __name__ == "__main__":
     logger.info(f"Dev count {torch.cuda.device_count()}")
 
     # Train the model
-    model = BertPokerValueModel()
+    model = BertPokerValueModel() 
+    model.load_from_checkpoint("./models/bert_train_100k_val_0614.zip")
     #model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
 
     do_train = True
