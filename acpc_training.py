@@ -2,6 +2,7 @@ import torch
 import time
 import os
 import multiprocessing
+import traceback
 from acpc_dataset import AcpcDataset
 from poker_bert_models import BertPokerValueModel
 from datetime import datetime
@@ -20,6 +21,9 @@ TEST_ROWS = 128*1024
 
 TRAIN_ROWS = 2*1024*1024
 TEST_ROWS = 64*1024
+
+TRAIN_ROWS = 1024
+TEST_ROWS = 1024
 
 # At least 512 to get gain from parallelization
 BATCH_SIZE = 512
@@ -47,69 +51,74 @@ def forward_pass(model, input_data, correct_label, criterion, device):
 
 def train_worker(result_dict, model, train_dataset_path, skip_rows, nrows, device_id):
 
-    torch.cuda.set_device(device_id)
+    try:
+        torch.cuda.set_device(device_id)
 
-    #logger.info(f"Running training on device {device_id}.")
-    num_mini_batches = nrows // MINI_BATCH_SIZE
+        #logger.info(f"Running training on device {device_id}.")
+        num_mini_batches = nrows // MINI_BATCH_SIZE
 
-    start = time.time()
-    train_dataset = AcpcDataset(
-        train_dataset_path, skip_rows, nrows, model.get_tokenizer()
-    )
-    load_dataset_time = time.time() - start
-
-    start = time.time()
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=MINI_BATCH_SIZE, shuffle=False
-    )
-    create_dataloader_time = time.time() - start
-
-    acc_train = 0
-    loss_train = 0
-
-    start = time.time()
-    model.to(device_id)
-    copy_model_to_device_time = time.time() - start
-
-    criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-
-    start = time.time()
-
-    for train_input, train_label in train_dataloader:
-
-        batch_loss, acc = forward_pass(
-            model, train_input, train_label, criterion, device_id
+        start = time.time()
+        train_dataset = AcpcDataset(
+            train_dataset_path, skip_rows, nrows, model.get_tokenizer()
         )
+        load_dataset_time = time.time() - start
 
-        batch_loss = batch_loss / num_mini_batches
+        start = time.time()
+        train_dataloader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=MINI_BATCH_SIZE, shuffle=False
+        )
+        create_dataloader_time = time.time() - start
 
-        loss_train += batch_loss.item()
-        acc_train += (acc / num_mini_batches)
+        acc_train = 0
+        loss_train = 0
 
-        batch_loss.backward()
+        start = time.time()
+        model.to(device_id)
+        copy_model_to_device_time = time.time() - start
 
-    gradient_compute_time = time.time() - start
-    
-    start = time.time()
-    optimizer.step()
-    optimizer.zero_grad()
-    optimizer_step_time = time.time() - start
-    
-    start = time.time()
-    model.to(torch.device("cpu"))
-    model_to_cpu_time = time.time() - start
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    result_dict["model"] = model
-    result_dict["acc_train"] = acc_train
-    result_dict["loss_train"] = loss_train
+        start = time.time()
 
-    result_dict["load_dataset_time"] = load_dataset_time
-    result_dict["create_dataloader_time"] = create_dataloader_time
-    result_dict["copy_model_to_device_time"] = create_dataloader_time
-    result_dict["gradient_compute_time"] = gradient_compute_time
-    result_dict["optimizer_step_time"] = optimizer_step_time
-    result_dict["model_to_cpu_time"] = model_to_cpu_time
+        for train_input, train_label in train_dataloader:
+
+            batch_loss, acc = forward_pass(
+                model, train_input, train_label, criterion, device_id
+            )
+
+            batch_loss = batch_loss / num_mini_batches
+
+            loss_train += batch_loss.item()
+            acc_train += (acc / num_mini_batches)
+
+            batch_loss.backward()
+
+        gradient_compute_time = time.time() - start
+        
+        start = time.time()
+        optimizer.step()
+        optimizer.zero_grad()
+        optimizer_step_time = time.time() - start
+        
+        start = time.time()
+        model.to(torch.device("cpu"))
+        model_to_cpu_time = time.time() - start
+
+        result_dict["model"] = model
+        result_dict["acc_train"] = acc_train
+        result_dict["loss_train"] = loss_train
+
+        result_dict["load_dataset_time"] = load_dataset_time
+        result_dict["create_dataloader_time"] = create_dataloader_time
+        result_dict["copy_model_to_device_time"] = create_dataloader_time
+        result_dict["gradient_compute_time"] = gradient_compute_time
+        result_dict["optimizer_step_time"] = optimizer_step_time
+        result_dict["model_to_cpu_time"] = model_to_cpu_time
+
+    except Exception as e:
+        logger.error(f"Training process crashed for device_id {device_id}")
+        logger.error(traceback.format_exc())
 
 
 def weight_normalizer(models) -> torch.nn.Module:
@@ -194,21 +203,28 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
                     #logger.info(f"Joining process {device_id}")
                     process.join()
                     
-                    models.append(result_dict["model"])
-                    total_loss_train.append(result_dict["loss_train"])
-                    total_acc_train.append(result_dict["acc_train"])
+                    if "model" in result_dict and "model_to_cpu_time" in result_dict:
+                        models.append(result_dict["model"])
+                        total_loss_train.append(result_dict["loss_train"])
+                        total_acc_train.append(result_dict["acc_train"])
 
-                    load_dataset_time.append(result_dict["load_dataset_time"])
-                    create_dataloader_time.append(result_dict["create_dataloader_time"])
-                    copy_model_to_device_time.append(result_dict["copy_model_to_device_time"])
-                    gradient_compute_time.append(result_dict["gradient_compute_time"])
-                    optimizer_step_time.append(result_dict["optimizer_step_time"])
-                    model_to_cpu_time.append(result_dict["model_to_cpu_time"])
+                        load_dataset_time.append(result_dict["load_dataset_time"])
+                        create_dataloader_time.append(result_dict["create_dataloader_time"])
+                        copy_model_to_device_time.append(result_dict["copy_model_to_device_time"])
+                        gradient_compute_time.append(result_dict["gradient_compute_time"])
+                        optimizer_step_time.append(result_dict["optimizer_step_time"])
+                        model_to_cpu_time.append(result_dict["model_to_cpu_time"])
 
                 # Average models
                 #logger.info(f"Averaging models from different processes")
                 start = time.time()
-                model = weight_normalizer(models)
+
+                # Update models only if some models are back
+                if len(models) > 1:
+                    model = weight_normalizer(models)
+                elif len(model) == 1:
+                    model = models[0]
+                
                 weight_normalizer_time.append(time.time() - start)
 
         logger.info(f"load_dataset_time: {mean(load_dataset_time):.3f}s")
