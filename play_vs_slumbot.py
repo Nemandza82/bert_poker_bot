@@ -34,9 +34,13 @@ import sys
 import argparse
 from bpb_common import SMALL_BLIND_SIZE, STACK_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD, PLAYER_SB_STRING, PLAYER_BB_STRING
 from bpb_common import card_to_sentance
+from bpb_bot import BpBBot
 
 
 host = 'slumbot.com'
+BOT_CHECKPOINT = "./models/bert_train_002m_val_0641.zip"
+BOT_DEVICE = "cpu"
+
 NUM_STREETS = 4
 BIG_BLIND_SIZE = 2 * SMALL_BLIND_SIZE
 
@@ -154,6 +158,7 @@ def ParseAction(action, hero_pos, hole_cards, board):
                 pos = -1
                 last_bet_size = 0
 
+                # Its all in.. break..
                 break
             
             if check_or_call_ends_street:
@@ -215,8 +220,8 @@ def ParseAction(action, hero_pos, hole_cards, board):
                 min_bet_size = last_bet_size
 	        
             # Make sure minimum opening bet is the size of the big blind.
-                if min_bet_size < BIG_BLIND_SIZE:
-                    min_bet_size = BIG_BLIND_SIZE
+            if min_bet_size < BIG_BLIND_SIZE:
+                min_bet_size = BIG_BLIND_SIZE
             else:
                 min_bet_size = BIG_BLIND_SIZE
             
@@ -250,7 +255,7 @@ def ParseAction(action, hero_pos, hole_cards, board):
         'street_last_bet_to': street_last_bet_to,
         'total_last_bet_to': total_last_bet_to,
         'last_bet_size': last_bet_size,
-        'last_bettor': last_bettor,
+        'last_bettor': pos_string(last_bettor),
     }
 
 
@@ -298,10 +303,12 @@ def Act(token, action):
     
     if not success:
         print('Status code: %s' % repr(response.status_code))
+        
         try:
             print('Error response: %s' % repr(response.json()))
         except ValueError:
             pass
+        
         sys.exit(-1)
 
     try:
@@ -316,7 +323,7 @@ def Act(token, action):
         
     return r
     
-def PlayHand(token):
+def PlayHand(token, bot):
     r = NewHand(token)
     
     # We may get a new token back from /api/new_hand
@@ -358,11 +365,8 @@ def PlayHand(token):
             sys.exit(-1)
         
         # This sample program implements a naive strategy of "always check or call".
-        if parsed_action['last_bettor'] != -1:
-            incr = 'c'
-        else:
-            incr = 'k'
-
+        incr = bot.play_hand(parsed_action)
+        
         print('Sending incremental action: %s' % incr)
         r = Act(token, incr)
 
@@ -404,6 +408,7 @@ def Login(username, password):
     return token
 
 
+#  python play_vs_slumbot.py --username ngrujic@gmail.com --password dzohusafet
 def main():
     parser = argparse.ArgumentParser(description='Slumbot API example')
     parser.add_argument('--username', type=str)
@@ -422,9 +427,12 @@ def main():
     #   urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     num_hands = 100
     winnings = 0
+
+    # Create Bot
+    bot = BpBBot(BOT_CHECKPOINT, BOT_DEVICE) 
     
     for h in range(num_hands):
-        (token, hand_winnings) = PlayHand(token)
+        (token, hand_winnings) = PlayHand(token, bot)
         winnings += hand_winnings
     
     print('Total winnings: %i' % winnings)
