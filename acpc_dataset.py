@@ -5,7 +5,7 @@ import pandas as pd
 
 
 class AcpcDataset(torch.utils.data.Dataset):
-    def __init__(self, path, skip_rows, nrows, tokenizer):
+    def __init__(self, path, skip_rows, nrows, model):
 
         #print(f"Loading {path} dataset")
 
@@ -15,7 +15,7 @@ class AcpcDataset(torch.utils.data.Dataset):
         #print(f"Loaded csv {path}")
         #print(df)
 
-        self.tokenizer = tokenizer
+        self.model = model
         self.labels = [float(label) for label in df["score"]]
         self.texts = df["text"]
 
@@ -33,13 +33,7 @@ class AcpcDataset(torch.utils.data.Dataset):
     def get_batch_texts(self, idx):
         # Fetch a batch of inputs
         text = self.texts[idx]
-        tokenized = self.tokenizer(
-            text,
-            padding="max_length",
-            max_length=512,
-            truncation=True,
-            return_tensors="pt",
-        )
+        tokenized = self.model.tokenize(text)
 
         # print(f"Getting texts {idx}")
         # print(f"->{text}<-")

@@ -20,7 +20,7 @@ TRAIN_ROWS = 10*1024*1024 # 10 miliona
 TEST_ROWS = 128*1024
 
 TRAIN_ROWS = 2*1024*1024
-TEST_ROWS = 64*1024
+TEST_ROWS = 192*1024
 
 # At least 512 to get gain from parallelization
 BATCH_SIZE = 512
@@ -32,10 +32,7 @@ def forward_pass(model, input_data, correct_label, criterion, device):
     correct_label = correct_label.to(device)
     correct_label = correct_label.unsqueeze(1)
 
-    mask = input_data["attention_mask"].to(device)
-    input_id = input_data["input_ids"].squeeze(1).to(device)
-
-    output = model(input_id, mask)
+    output = model(input_data, device)
 
     if criterion is not None:
         batch_loss = criterion(output, correct_label.float())
@@ -56,7 +53,7 @@ def train_worker(result_dict, model, train_dataset_path, skip_rows, nrows, devic
 
         start = time.time()
         train_dataset = AcpcDataset(
-            train_dataset_path, skip_rows, nrows, model.get_tokenizer()
+            train_dataset_path, skip_rows, nrows, model
         )
         load_dataset_time = time.time() - start
 
@@ -135,7 +132,7 @@ def weight_normalizer(models) -> torch.nn.Module:
 
 def train(model, train_dataset_path, val_dataset_path, epochs):
 
-    val_dataset = AcpcDataset(val_dataset_path, 0, TEST_ROWS, model.get_tokenizer())
+    val_dataset = AcpcDataset(val_dataset_path, 0, TEST_ROWS, model)
     num_cuda_devices = torch.cuda.device_count()
 
     for epoch_num in range(epochs):
@@ -302,8 +299,7 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_train_100k_val_0614.zip")
-    #model.load_from_checkpoint("./models/bert_train_069_val_061.zip")
+    model.load_from_checkpoint("./models/bert_train_002m_val_0641.zip")
 
     do_train = True
 
@@ -312,5 +308,5 @@ if __name__ == "__main__":
         train(model, "data/acpc_train.txt", "data/acpc_val.txt", EPOCHS)
 
     # Evaluate model
-    test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, model.get_tokenizer())
+    test = AcpcDataset("data/acpc_test.txt", 0, TEST_ROWS, model)
     evaluate(model, test)

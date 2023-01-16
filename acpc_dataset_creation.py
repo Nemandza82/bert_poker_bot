@@ -11,6 +11,7 @@ player_small_blind = "Small Blind"
 player_big_blind = "Big Blind"
 
 
+# For input "Qs" returns "Queen of Spades"
 def parse_card(card_str):
     assert len(card_str) == 2
     rank = ""
@@ -55,6 +56,9 @@ def parse_card(card_str):
     return f"{rank} of {suite}"
 
 
+# Parses multiple cards. Returns list as result.
+# Example input: Qs2d
+# Example output ["Queen of Spades", "Two of Diamonds"]
 def parse_cards(cards_str):
     i = 0
     cards = []
@@ -67,31 +71,40 @@ def parse_cards(cards_str):
 
     return cards
 
-
+# Parsing actions in one street. For instance input is "cr1219f".
+# Last action must be c or f.
 def parse_actions(street_actions_string):
     i = 0
     street_actions = []
 
     while i < len(street_actions_string):
+
+        # Parse fold action
         if street_actions_string[i] == "f":
             street_actions.append({"type": action_fold})
             i += 1
             continue
 
+        # Parse check/call actions
         if street_actions_string[i] == "c":
             street_actions.append({"type": action_cc})
             i += 1
             continue
 
+        # Parse raise action
         if street_actions_string[i] == "r":
             i += 1
             r_start = i
 
+            # Now parsing raise ammount. Advance until we get to next action. 
+            # Raise ammount can not be last since after raise must be another action
             while street_actions_string[i] not in ["c", "r", "f"]:
                 i += 1
 
+            # Raise ammount is now between r_start and i
             r_amount = street_actions_string[r_start:i]
 
+            # We normalize raise ammount by small blind size
             amount = round(float(r_amount) / small_blind_size, 2)
             street_actions.append({"type": action_raise, "amount": amount})
             continue
@@ -99,15 +112,20 @@ def parse_actions(street_actions_string):
     return street_actions
 
 
-def get_player(street, action):
-    action = action % 2
+def get_player(street, action_idx):
+    action_idx = action_idx % 2
 
     if street == 0:
-        return player_small_blind if action == 0 else player_big_blind
+        # In pre-flop in heads-up small_blind plays first
+        return player_small_blind if action_idx == 0 else player_big_blind
     else:
-        return player_small_blind if action == 1 else player_big_blind
+        # In post-flop in heads-up big_blind plays first
+        return player_small_blind if action_idx == 1 else player_big_blind
 
 
+# Input is list of cards. Eg: ["Queen of Spades", "Two of Diamonds"]
+# Output is human readable sentance: "Queen of Spades and Two of Diamonds"
+# If there are more than 2 cards it ads commas.
 def print_cards(cards):
     text = ""
     card_i = 0
@@ -127,18 +145,22 @@ def print_cards(cards):
 
 # STATE:4:r200c/cc/r466c/cr1219f:KdJd|7sAs/JcTs7c/Ah/4d:-466|466:Hero|Villian
 # Money is mormalized so that sb is 1
-class Hand:
+class AcpcLogHand:
     def __init__(self, line):
         self.valid = True
         self.actions = []
 
-        # print(f"Parsing {line}")
+        # We first split by : to get sections
         spliited = line.split(":")
 
         try:
+            # First must be string "STATE"
             assert spliited[0] == "STATE"
+
+            # Action strings are separated by "/"
             action_strings = spliited[2].split("/")
 
+            # street_actions_string can be "cr1219f"
             for street_actions_string in action_strings:
                 street_actions = parse_actions(street_actions_string)
                 self.actions.append(street_actions)
@@ -146,6 +168,8 @@ class Hand:
             # print(self.actions)
 
             card_strings = spliited[3].split("/")
+
+            # card_strings[0] are hand cards. Eg: "KdJd|7sAs"
             hand_strings = card_strings[0].split("|")
 
             self.big_blind_card_string = hand_strings[0]
@@ -160,15 +184,19 @@ class Hand:
             self.common_cards = []
             i = 1
 
+            # Parses commonn cards. They are separated in card_strings
             while i < len(card_strings):
                 self.common_cards.append(parse_cards(card_strings[i]))
                 i += 1
 
             # print(f"Common cards {self.common_cards}")
 
+            # results splitted by "|" eg: "-466|466"
             results = spliited[4].split("|")
+
+            # Normalize result by small_blind_size
             self.big_blind_res = round(float(results[0]) / small_blind_size, 2)
-            self.small_blind_res = round(float(results[1]) / small_blind_size)
+            self.small_blind_res = round(float(results[1]) / small_blind_size, 2)
 
             # print(self.big_blind_res)
             # print(self.small_blind_res)
@@ -176,6 +204,12 @@ class Hand:
         except:
             self.valid = False
 
+    """
+    Return 3 values: 
+        hero_res: Multipluyer for winning eg.: 3.25
+        villian_cards: Eg.: TsAh
+        text: Eg.: " Hero is Big Blind. Big Blind gets Three of Diamonds and Ace of Hearts. Small Blind raises. Big Blind check/calls. "
+    """
     def print_hand(self, max_street, max_action_in_max_street):
         street = 0
         text = ""
@@ -289,7 +323,7 @@ class Hand:
         return results
 
 
-def parse_acpc_file(filename, train_f, val_f, test_f):
+def parse_acpc_log_file(filename, train_f, val_f, test_f):
     total_examples = 0
 
     with open(filename) as f:
@@ -305,7 +339,7 @@ def parse_acpc_file(filename, train_f, val_f, test_f):
             else:
                 dst_file = test_f
 
-            hand = Hand(line)
+            hand = AcpcLogHand(line)
 
             if not hand.valid:
                 continue
@@ -334,7 +368,7 @@ def convert_logs_to_dataset(root_folder):
                     if filename.endswith(".log"):
                         print(f"Parsing {root_folder}{filename} ")
 
-                        examples = parse_acpc_file(
+                        examples = parse_acpc_log_file(
                             f"{root_folder}{filename}", train_f, val_f, test_f
                         )
                         total_examples += examples
@@ -346,5 +380,6 @@ def convert_logs_to_dataset(root_folder):
                             break
 
 
-# parse_acpc_file("./data/acpc2017/PokerBot5.PokerCNN.1.0.log")
-convert_logs_to_dataset("./data/acpc2017/")
+if __name__ == "__main""
+    # parse_acpc_log_file("./data/acpc2017/PokerBot5.PokerCNN.1.0.log")
+    convert_logs_to_dataset("./data/acpc2017/")
