@@ -1,59 +1,9 @@
 import os
 import random
 import math
+from bpb_common import SMALL_BLIND_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD, PLAYER_SB_STRING, PLAYER_BB_STRING
+from bpb_common import card_to_sentance
 
-small_blind_size = 50
-action_cc = "check/calls"
-action_raise = "raises"
-action_fold = "folds"
-
-player_small_blind = "Small Blind"
-player_big_blind = "Big Blind"
-
-
-# For input "Qs" returns "Queen of Spades"
-def parse_card(card_str):
-    assert len(card_str) == 2
-    rank = ""
-    suite = ""
-
-    if card_str[0] == "2":
-        rank = "Two"
-    elif card_str[0] == "3":
-        rank = "Three"
-    elif card_str[0] == "4":
-        rank = "Four"
-    elif card_str[0] == "5":
-        rank = "Five"
-    elif card_str[0] == "6":
-        rank = "Six"
-    elif card_str[0] == "7":
-        rank = "Seven"
-    elif card_str[0] == "8":
-        rank = "Eight"
-    elif card_str[0] == "9":
-        rank = "Nine"
-    elif card_str[0] == "T":
-        rank = "Ten"
-    elif card_str[0] == "J":
-        rank = "Jack"
-    elif card_str[0] == "Q":
-        rank = "Queen"
-    elif card_str[0] == "K":
-        rank = "King"
-    elif card_str[0] == "A":
-        rank = "Ace"
-
-    if card_str[1] == "s":
-        suite = "Spades"
-    elif card_str[1] == "c":
-        suite = "Clubs"
-    elif card_str[1] == "h":
-        suite = "Hearts"
-    elif card_str[1] == "d":
-        suite = "Diamonds"
-
-    return f"{rank} of {suite}"
 
 
 # Parses multiple cards. Returns list as result.
@@ -64,12 +14,13 @@ def parse_cards(cards_str):
     cards = []
 
     while i < len(cards_str):
-        card = parse_card(cards_str[i : i + 2])
+        card = card_to_sentance(cards_str[i : i + 2])
 
         cards.append(card)
         i += 2
 
     return cards
+
 
 # Parsing actions in one street. For instance input is "cr1219f".
 # Last action must be c or f.
@@ -81,13 +32,13 @@ def parse_actions(street_actions_string):
 
         # Parse fold action
         if street_actions_string[i] == "f":
-            street_actions.append({"type": action_fold})
+            street_actions.append({"type": ACTION_FOLD})
             i += 1
             continue
 
         # Parse check/call actions
         if street_actions_string[i] == "c":
-            street_actions.append({"type": action_cc})
+            street_actions.append({"type": ACTION_CC})
             i += 1
             continue
 
@@ -105,8 +56,8 @@ def parse_actions(street_actions_string):
             r_amount = street_actions_string[r_start:i]
 
             # We normalize raise ammount by small blind size
-            amount = round(float(r_amount) / small_blind_size, 2)
-            street_actions.append({"type": action_raise, "amount": amount})
+            amount = round(float(r_amount) / SMALL_BLIND_SIZE, 2)
+            street_actions.append({"type": ACTION_RAISE, "amount": amount})
             continue
 
     return street_actions
@@ -117,10 +68,10 @@ def get_player(street, action_idx):
 
     if street == 0:
         # In pre-flop in heads-up small_blind plays first
-        return player_small_blind if action_idx == 0 else player_big_blind
+        return PLAYER_SB_STRING if action_idx == 0 else PLAYER_BB_STRING
     else:
         # In post-flop in heads-up big_blind plays first
-        return player_small_blind if action_idx == 1 else player_big_blind
+        return PLAYER_SB_STRING if action_idx == 1 else PLAYER_BB_STRING
 
 
 # Input is list of cards. Eg: ["Queen of Spades", "Two of Diamonds"]
@@ -194,9 +145,9 @@ class AcpcLogHand:
             # results splitted by "|" eg: "-466|466"
             results = spliited[4].split("|")
 
-            # Normalize result by small_blind_size
-            self.big_blind_res = round(float(results[0]) / small_blind_size, 2)
-            self.small_blind_res = round(float(results[1]) / small_blind_size, 2)
+            # Normalize result by SMALL_BLIND_SIZE
+            self.big_blind_res = round(float(results[0]) / SMALL_BLIND_SIZE, 2)
+            self.small_blind_res = round(float(results[1]) / SMALL_BLIND_SIZE, 2)
 
             # print(self.big_blind_res)
             # print(self.small_blind_res)
@@ -208,7 +159,7 @@ class AcpcLogHand:
     Return 3 values: 
         hero_res: Multipluyer for winning eg.: 3.25
         villian_cards: Eg.: TsAh
-        text: Eg.: " Hero is Big Blind. Big Blind gets Three of Diamonds and Ace of Hearts. Small Blind raises. Big Blind check/calls. "
+        text: Eg.: "Hero is Big Blind. Big Blind gets Three of Diamonds and Ace of Hearts. Small Blind raises. Big Blind check/calls. "
     """
     def print_hand(self, max_street, max_action_in_max_street):
         street = 0
@@ -216,7 +167,7 @@ class AcpcLogHand:
 
         hero = get_player(max_street, max_action_in_max_street)
 
-        if hero == player_small_blind:
+        if hero == PLAYER_SB_STRING:
             hero_cards = self.small_blind_cards
             hero_res = self.small_blind_res
             villian_cards = self.big_blind_card_string
@@ -231,7 +182,7 @@ class AcpcLogHand:
         # sb and bb are normalized to 1 and 2
         sb_pot = 1
         bb_pot = 2
-        last_action_type = action_fold
+        last_action_type = ACTION_FOLD
 
         while street <= max_street:
             if street > 0:
@@ -258,26 +209,26 @@ class AcpcLogHand:
                 last_action_type = last_action["type"]
 
                 # update pots
-                if last_action_type == action_cc:
-                    if player == player_small_blind:
+                if last_action_type == ACTION_CC:
+                    if player == PLAYER_SB_STRING:
                         sb_pot = bb_pot
                     else:
                         bb_pot = sb_pot
-                elif last_action_type == action_raise:
+                elif last_action_type == ACTION_RAISE:
                     # It is raise to
-                    if player == player_small_blind:
+                    if player == PLAYER_SB_STRING:
                         sb_pot = last_action["amount"]
                     else:
                         bb_pot = last_action["amount"]
 
-                # amount = "" if last_action_type != action_raise else last_action['amount']
+                # amount = "" if last_action_type != ACTION_RAISE else last_action['amount']
 
                 text += f"{player} {last_action_type}. "
                 action_id += 1
 
             street += 1
 
-        hero_pot = sb_pot if player == player_small_blind else bb_pot
+        hero_pot = sb_pot if player == PLAYER_SB_STRING else bb_pot
 
         # We are learning how much hero pot is multiplied
         hero_res = hero_res / hero_pot
@@ -293,7 +244,7 @@ class AcpcLogHand:
         # print(f"Player {player} pot: {hero_pot}")
 
         # We are not learning what happens when someone folds (we know that)
-        if last_action_type == action_fold:
+        if last_action_type == ACTION_FOLD:
             return None, None, None
 
         # print(text)
