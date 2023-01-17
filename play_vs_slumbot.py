@@ -215,31 +215,6 @@ def ParseAction(action, hero_pos, hole_cards, board):
                 return {'error': 'Bet size not an integer'}
             
             new_last_bet_size = new_street_last_bet_to - street_last_bet_to
-            
-            # Validate that the bet is legal
-            remaining = STACK_SIZE - street_last_bet_to
-            
-            if last_bet_size > 0:
-                min_bet_size = last_bet_size
-	            
-                # Make sure minimum opening bet is the size of the big blind.
-                if min_bet_size < BIG_BLIND:
-                    min_bet_size = BIG_BLIND
-            else:
-                min_bet_size = BIG_BLIND
-            
-            # Can always go all-in
-            if min_bet_size > remaining:
-                min_bet_size = remaining
-            
-            if new_last_bet_size < min_bet_size:
-                return {'error': 'Bet too small'}
-            
-            max_bet_size = remaining
-            
-            if new_last_bet_size > max_bet_size:
-                return {'error': 'Bet too big'}
-
             sentance += f"{pos_string(pos)} {ACTION_RAISE}. "
             
             last_bet_size = new_last_bet_size
@@ -432,13 +407,14 @@ def main():
     # To avoid SSLError:
     #   import urllib3
     #   urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    num_hands = 10000
+    num_hands = 10010
     winnings = 0
 
     # Create Bot
     bot = BpBBot(BOT_CHECKPOINT, BOT_DEVICE) 
     
     for h in range(num_hands):
+        logger.info(f"Playing hand {h} -------------------------------------------------")
         (token, hand_winnings) = PlayHand(token, bot)
         winnings += hand_winnings
     

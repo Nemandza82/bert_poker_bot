@@ -32,7 +32,7 @@ class BpBBot():
 
         duration = time.time() - start
         
-        logger.info(f"BPB Inference in {duration:.2f}. mult_cc: {mult_cc:.2f}. mult_raise: {mult_raise:.2f}")
+        logger.info(f"BPB Inference in {duration:.2f}s. mult_cc: {mult_cc:.2f}. mult_raise: {mult_raise:.2f}")
 
         # If bot cc and raise are less than 0 than fold
         if mult_raise < 0 and mult_cc < 0:
@@ -50,84 +50,90 @@ class BpBBot():
         remaining = STACK_SIZE - total_last_bet_to
 
         # If there is to raise
-        if remaining > 0:
-            logger.info(f"Remaining is {remaining}")
+        
+        logger.info(f"Remaining is {remaining}")
 
-            # Now consider full raise
-            raise_size = total_last_bet_to
-            raise_size = min(raise_size, remaining)
+        # Now consider full raise
+        raise_size = total_last_bet_to
+        raise_size = min(raise_size, remaining)
 
-            raise_odds_limiter = raise_size / (total_last_bet_to + raise_size)
+        raise_odds_limiter = raise_size / (total_last_bet_to + raise_size)
 
-            # HACk ----------
-            raise_odds_limiter /= 2
-            logger.info(f"Reducint raise_odds_limiter to half {raise_odds_limiter}")
+        # HACk ----------
+        raise_odds_limiter /= 2
+        logger.info(f"HACk: reducing raise_odds_limiter to half {raise_odds_limiter}")
 
-            logger.info(f"Evaluate full raise size {raise_size}.")
-            logger.info(f"mult_raise {mult_raise:.2f} vs raise_odds_limiter {raise_odds_limiter}.")
+        logger.info(f"Evaluate full raise size {raise_size}.")
+        logger.info(f"mult_raise {mult_raise:.2f} vs raise_odds_limiter {raise_odds_limiter}.")
 
-            # Calculate raise odds
-            if mult_raise > raise_odds_limiter:
-                logger.info(f"mult_raise is > raise_odds_limiter")
-                return f"b{parsed_action['street_last_bet_to'] + raise_size}"
+        # Calculate raise odds
+        if mult_raise > raise_odds_limiter:
+            logger.info(f"mult_raise is > raise_odds_limiter")
 
-            # Try to find smaller raise size
-            if mult_raise > 0:
-                logger.info(f"Try to find smaller raise size")
+            if remaining == 0:
+                logger.info("There is no money to raise: Just call")
+                return "c"
 
-                if parsed_action['last_bet_size'] > 0:
-                    min_bet_size = parsed_action['last_bet_size']
-                    
-                    # Make sure minimum opening bet is the size of the big blind.
-                    if min_bet_size < BIG_BLIND_SIZE:
-                        min_bet_size = BIG_BLIND_SIZE
-                else:
+            return f"b{parsed_action['street_last_bet_to'] + raise_size}"
+
+        # Try to find smaller raise size
+        if mult_raise > 0:
+            logger.info(f"Try to find smaller raise size")
+
+            if parsed_action['last_bet_size'] > 0:
+                min_bet_size = parsed_action['last_bet_size']
+                
+                # Make sure minimum opening bet is the size of the big blind.
+                if min_bet_size < BIG_BLIND_SIZE:
                     min_bet_size = BIG_BLIND_SIZE
-                    
-                # Can always go all-in
-                if min_bet_size > remaining:
-                    min_bet_size = remaining
+            else:
+                min_bet_size = BIG_BLIND_SIZE
+                
+            # Can always go all-in
+            if min_bet_size > remaining:
+                min_bet_size = remaining
 
-                calc_bet_size = round((total_last_bet_to * mult_raise) / (1 - mult_raise))
+            calc_bet_size = round((total_last_bet_to * mult_raise) / (1 - mult_raise))
 
-                logger.info(f"Calc bet size is {calc_bet_size}")
+            logger.info(f"Calc bet size is {calc_bet_size}")
 
-                if calc_bet_size >= min_bet_size:
-                    return f"b{parsed_action['street_last_bet_to'] + min_bet_size}"
+            if calc_bet_size >= min_bet_size:
+                if remaining == 0:
+                    logger.info("There is no money to raise: Just call")
+                    return "c"
 
-                logger.info(f"Smaller than min_bet_size {min_bet_size}")
+                return f"b{parsed_action['street_last_bet_to'] + min_bet_size}"
 
-        else:
-            logger.info("There is no money to raise: Consider cc")
+            logger.info(f"Smaller than min_bet_size {min_bet_size}")
 
 
         # ----------------------- Evaluate check call now -------------------------
-        print("Evaluate check/call now")
+        logger.info("Evaluate check/call now")
 
         if parsed_action['last_bettor'] == "":
-            print("If not forced to put any money in just check")
+            logger.info("If not forced to put any money in just check")
             return "k"
 
         if mult_cc < 0:
-            print(f"We need to put money in but we have negative mult_cc {mult_cc:.2f}: fold")
+            logger.info(f"We need to put money in but we have negative mult_cc {mult_cc:.2f}: fold")
             return "f"
         else:
-            print("mult_cc >= 0: call")
+            logger.info("mult_cc >= 0: call")
             return "c"
 
         call_size = parsed_action["last_bet_size"]
-        print(f"We need to call {call_size}")
+        logger.info(f"We need to call {call_size}")
 
         call_odds_limiter = call_size / total_last_bet_to
 
-        print(f"mult_cc {mult_cc:.2f} vs call_odds_limiter {call_odds_limiter}.")
+        logger.info(f"mult_cc {mult_cc:.2f} vs call_odds_limiter {call_odds_limiter}.")
 
         # Calculate odds
         if mult_cc > call_odds_limiter:
-            print("Positive odds for calling")
+            logger.info("Positive odds for calling")
             return "c"
         
-        print("Only we can do is fold")
+        logger.info("Only we can do is fold")
         return "f"
 
 

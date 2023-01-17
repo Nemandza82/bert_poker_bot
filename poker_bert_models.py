@@ -8,7 +8,7 @@ Input is sentance describing poker hand state. Output is tanh of learned multipl
 Hero input money in pot.
 """
 class BertPokerValueModel(torch.nn.Module):
-    def __init__(self, dropout=0.5):
+    def __init__(self, dropout=0.01):
         super(BertPokerValueModel, self).__init__()
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")

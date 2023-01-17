@@ -1,23 +1,48 @@
 import torch
 import math
+import time
+import random
 import numpy as np
 import pandas as pd
+from loguru import logger
+
+
+def load_random_df(path, nrows):
+    logger.info(f"Loading random {nrows} from {path}")
+    logger.info(f"Counting number of lines in {path}")
+    
+    line_count = 0
+    start = time.time()
+
+    with open(path, 'r') as fp:
+        for line in fp:
+            line_count += 1
+
+    duration = time.time() - start
+    logger.info(f"Number of lines {line_count} counted in {duration:.2f}s")
+
+    skip_rows = random.randint(0, line_count - nrows - 10)
+    logger.info(f"Randomized number of skip rows {skip_rows}")
+
+    #print(f"Loading {path} dataset")
+    start = time.time()
+    df = pd.read_csv(path, sep=";", names=["score", "villian_cards", "text"], skiprows=skip_rows, nrows=nrows)
+    duration = time.time() - start
+
+    logger.info(f"Loaded dataframe in {duration:.2f}s")
+
+    #print(f"Loaded csv {path}")
+    #print(df)
+
+    return df
 
 
 class AcpcDataset(torch.utils.data.Dataset):
-    def __init__(self, path, skip_rows, nrows, model):
-
-        #print(f"Loading {path} dataset")
-
-        skip_rows_list = list(range(1, skip_rows))
-        df = pd.read_csv(path, sep=";", skiprows=skip_rows_list, nrows=nrows)
-
-        #print(f"Loaded csv {path}")
-        #print(df)
+    def __init__(self, df, model):
 
         self.model = model
         self.labels = [float(label) for label in df["score"]]
-        self.texts = df["text"]
+        self.texts = [text for text in df["text"]]
 
     def __len__(self):
         return len(self.labels)
