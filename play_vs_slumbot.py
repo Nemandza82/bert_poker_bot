@@ -32,6 +32,8 @@
 import requests
 import sys
 import argparse
+from loguru import logger
+from datetime import datetime
 from bpb_common import SMALL_BLIND_SIZE, STACK_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD, PLAYER_SB_STRING, PLAYER_BB_STRING
 from bpb_common import card_to_sentance
 from bpb_bot import BpBBot
@@ -39,7 +41,8 @@ from bpb_bot import BpBBot
 
 host = 'slumbot.com'
 BOT_CHECKPOINT = "./models/bert_train_002m_val_0641.zip"
-BOT_DEVICE = "cpu"
+#BOT_DEVICE = "cpu"
+BOT_DEVICE = "cuda:0"
 
 NUM_STREETS = 4
 BIG_BLIND_SIZE = 2 * SMALL_BLIND_SIZE
@@ -218,12 +221,12 @@ def ParseAction(action, hero_pos, hole_cards, board):
             
             if last_bet_size > 0:
                 min_bet_size = last_bet_size
-	        
-            # Make sure minimum opening bet is the size of the big blind.
-            if min_bet_size < BIG_BLIND_SIZE:
-                min_bet_size = BIG_BLIND_SIZE
+	            
+                # Make sure minimum opening bet is the size of the big blind.
+                if min_bet_size < BIG_BLIND:
+                    min_bet_size = BIG_BLIND
             else:
-                min_bet_size = BIG_BLIND_SIZE
+                min_bet_size = BIG_BLIND
             
             # Can always go all-in
             if min_bet_size > remaining:
@@ -272,21 +275,23 @@ def NewHand(token):
     success = getattr(response, 'status_code') == 200
     
     if not success:
-        print('Status code: %s' % repr(response.status_code))
+        logger.error('Status code: %s' % repr(response.status_code))
+        
         try:
-            print('Error response: %s' % repr(response.json()))
+            logger.error('Error response: %s' % repr(response.json()))
         except ValueError:
             pass
+        
         sys.exit(-1)
 
     try:
         r = response.json()
     except ValueError:
-        print('Could not get JSON from response')
+        logger.error('Could not get JSON from response')
         sys.exit(-1)
 
     if 'error_msg' in r:
-        print('Error: %s' % r['error_msg'])
+        logger.error('Error: %s' % r['error_msg'])
         sys.exit(-1)
         
     return r
@@ -302,10 +307,10 @@ def Act(token, action):
     success = getattr(response, 'status_code') == 200
     
     if not success:
-        print('Status code: %s' % repr(response.status_code))
+        logger.error('Status code: %s' % repr(response.status_code))
         
         try:
-            print('Error response: %s' % repr(response.json()))
+            logger.error('Error response: %s' % repr(response.json()))
         except ValueError:
             pass
         
@@ -314,11 +319,11 @@ def Act(token, action):
     try:
         r = response.json()
     except ValueError:
-        print('Could not get JSON from response')
+        logger.error('Could not get JSON from response')
         sys.exit(-1)
 
     if 'error_msg' in r:
-        print('Error: %s' % r['error_msg'])
+        logger.error('Error: %s' % r['error_msg'])
         sys.exit(-1)
         
     return r
@@ -332,42 +337,42 @@ def PlayHand(token, bot):
     if new_token:
         token = new_token
     
-    print('Token: %s' % token)
+    logger.info('Token: %s' % token)
     
     while True:
-        print('-----------------')
-        print(repr(r))
+        logger.info('-----------------')
+        logger.info(repr(r))
         
         action = r.get('action')
         client_pos = r.get('client_pos')
         hole_cards = r.get('hole_cards')
         board = r.get('board')
         winnings = r.get('winnings')
-        print('Action: %s' % action)
+        logger.info('Action: %s' % action)
         
         if client_pos:
-            print('Client pos: %i' % client_pos)
+            logger.info('Client pos: %i' % client_pos)
 
-        print('Client hole cards: %s' % repr(hole_cards))
-        print('Board: %s' % repr(board))
+        logger.info('Client hole cards: %s' % repr(hole_cards))
+        logger.info('Board: %s' % repr(board))
         
         if winnings is not None:
-            print('Hand winnings: %i' % winnings)
+            logger.info('Hand winnings: %i' % winnings)
             return (token, winnings)
         
         # Need to check or call
         parsed_action = ParseAction(action, client_pos, hole_cards, board)
 
-        print(f"Parsed action {parsed_action}")
+        logger.info(f"Parsed action {parsed_action}")
 
         if 'error' in parsed_action:
-            print('Error parsing action %s: %s' % (action, parsed_action['error']))
+            logger.error('Error parsing action %s: %s' % (action, parsed_action['error']))
             sys.exit(-1)
         
         # This sample program implements a naive strategy of "always check or call".
         incr = bot.play_hand(parsed_action)
         
-        print('Sending incremental action: %s' % incr)
+        logger.info('Sending incremental action: %s' % incr)
         r = Act(token, incr)
 
     # Should never get here
@@ -382,27 +387,29 @@ def Login(username, password):
     success = getattr(response, 'status_code') == 200
     
     if not success:
-        print('Status code: %s' % repr(response.status_code))
+        logger.error('Status code: %s' % repr(response.status_code))
+        
         try:
-            print('Error response: %s' % repr(response.json()))
+            logger.error('Error response: %s' % repr(response.json()))
         except ValueError:
             pass
+        
         sys.exit(-1)
 
     try:
         r = response.json()
     except ValueError:
-        print('Could not get JSON from response')
+        logger.error('Could not get JSON from response')
         sys.exit(-1)
 
     if 'error_msg' in r:
-        print('Error: %s' % r['error_msg'])
+        logger.error('Error: %s' % r['error_msg'])
         sys.exit(-1)
         
     token = r.get('token')
     
     if not token:
-        print('Did not get token in response to /api/login')
+        logger.error('Did not get token in response to /api/login')
         sys.exit(-1)
     
     return token
@@ -425,7 +432,7 @@ def main():
     # To avoid SSLError:
     #   import urllib3
     #   urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    num_hands = 100
+    num_hands = 10000
     winnings = 0
 
     # Create Bot
@@ -435,8 +442,11 @@ def main():
         (token, hand_winnings) = PlayHand(token, bot)
         winnings += hand_winnings
     
-    print('Total winnings: %i' % winnings)
+    logger.info('Total winnings: %i' % winnings)
 
     
 if __name__ == '__main__':
+    date = datetime.now().strftime("%m-%d-%Y_%H:%M")
+    logger.add(f"./logs/play_log_{date}.txt")
+
     main()

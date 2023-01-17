@@ -1,5 +1,6 @@
 import time
 import torch
+from loguru import logger
 from poker_bert_models import BertPokerValueModel
 from bpb_common import ACTION_CC, ACTION_RAISE, STACK_SIZE, BIG_BLIND_SIZE
 
@@ -10,6 +11,7 @@ class BpBBot():
         self.model.load_from_checkpoint(model_path)
 
         self.device = torch.device(device_string)
+        self.model = self.model.to(self.device)
 
     """
     Parsed action {'street': 3, 'hero': 'Big Blind', 'sentance': 'Hero is Big Blind. Big Blind gets Ace of 
@@ -23,9 +25,6 @@ class BpBBot():
         sentance_cc = parsed_action['sentance'] + f"{parsed_action['hero']} {ACTION_CC}."
         sentance_raise = parsed_action['sentance'] + f"{parsed_action['hero']} {ACTION_RAISE}."
 
-        print(f"sentance_cc '{sentance_cc}'")
-        print(f"sentance_raise '{sentance_raise}'")
-
         start = time.time()
         
         mult_cc = self.model.run_inference(sentance_cc, self.device)
@@ -33,52 +32,73 @@ class BpBBot():
 
         duration = time.time() - start
         
-        print(f"BPB Inference in {duration:.2f}. mult_cc: {mult_cc:.2f}. mult_raise: {mult_raise:.2f}")
+        logger.info(f"BPB Inference in {duration:.2f}. mult_cc: {mult_cc:.2f}. mult_raise: {mult_raise:.2f}")
 
         # If bot cc and raise are less than 0 than fold
         if mult_raise < 0 and mult_cc < 0:
-            return "f"
+            if parsed_action['last_bettor'] == "":
+                return "k"
+            else:
+                return "f"
 
 
         # ----------------------- Evaluate raising first -------------------------
-        print("Evaluate raising first")
+        logger.info("Evaluate raising first")
         total_last_bet_to = parsed_action['total_last_bet_to']
 
         # Remaining
         remaining = STACK_SIZE - total_last_bet_to
 
-        print(f"Remaining is {remaining}")
+        # If there is to raise
+        if remaining > 0:
+            logger.info(f"Remaining is {remaining}")
 
-        # Now consider full raise
-        raise_size = total_last_bet_to
-        raise_size = min(raise_size, remaining)
+            # Now consider full raise
+            raise_size = total_last_bet_to
+            raise_size = min(raise_size, remaining)
 
-        raise_odds_limiter = raise_size / (total_last_bet_to + raise_size)
+            raise_odds_limiter = raise_size / (total_last_bet_to + raise_size)
 
-        print(f"Evaluate full raise size {raise_size}.")
-        print(f"mult_raise {mult_raise} vs raise_odds_limiter {raise_odds_limiter}.")
+            # HACk ----------
+            raise_odds_limiter /= 2
+            logger.info(f"Reducint raise_odds_limiter to half {raise_odds_limiter}")
 
-        # Calculate raise odds
-        if mult_raise > raise_odds_limiter:
-            return f"r{raise_size}"
+            logger.info(f"Evaluate full raise size {raise_size}.")
+            logger.info(f"mult_raise {mult_raise:.2f} vs raise_odds_limiter {raise_odds_limiter}.")
 
-        # Try to find smaller raise size
-        if mult_raise > 0:
-            print(f"Try to find smaller raise size")
-            min_bet_size = max(BIG_BLIND_SIZE, parsed_action['last_bet_size'])
+            # Calculate raise odds
+            if mult_raise > raise_odds_limiter:
+                logger.info(f"mult_raise is > raise_odds_limiter")
+                return f"b{parsed_action['street_last_bet_to'] + raise_size}"
 
-            # Can always go all-in
-            if min_bet_size > remaining:
-                min_bet_size = remaining
+            # Try to find smaller raise size
+            if mult_raise > 0:
+                logger.info(f"Try to find smaller raise size")
 
-            calc_bet_size = round((total_last_bet_to * mult_raise) / (1 - mult_raise))
+                if parsed_action['last_bet_size'] > 0:
+                    min_bet_size = parsed_action['last_bet_size']
+                    
+                    # Make sure minimum opening bet is the size of the big blind.
+                    if min_bet_size < BIG_BLIND_SIZE:
+                        min_bet_size = BIG_BLIND_SIZE
+                else:
+                    min_bet_size = BIG_BLIND_SIZE
+                    
+                # Can always go all-in
+                if min_bet_size > remaining:
+                    min_bet_size = remaining
 
-            print(f"Calc bet size is {calc_bet_size}")
+                calc_bet_size = round((total_last_bet_to * mult_raise) / (1 - mult_raise))
 
-            if calc_bet_size >= min_bet_size:
-                return f"r{calc_bet_size}"
+                logger.info(f"Calc bet size is {calc_bet_size}")
 
-            print(f"Smaller than min_bet_size {min_bet_size}")
+                if calc_bet_size >= min_bet_size:
+                    return f"b{parsed_action['street_last_bet_to'] + min_bet_size}"
+
+                logger.info(f"Smaller than min_bet_size {min_bet_size}")
+
+        else:
+            logger.info("There is no money to raise: Consider cc")
 
 
         # ----------------------- Evaluate check call now -------------------------
@@ -89,15 +109,18 @@ class BpBBot():
             return "k"
 
         if mult_cc < 0:
-            print("We need to put money in but we have negative mult_cc {mult_cc}: fold")
+            print(f"We need to put money in but we have negative mult_cc {mult_cc:.2f}: fold")
             return "f"
+        else:
+            print("mult_cc >= 0: call")
+            return "c"
 
         call_size = parsed_action["last_bet_size"]
         print(f"We need to call {call_size}")
 
         call_odds_limiter = call_size / total_last_bet_to
 
-        print(f"mult_cc {mult_cc} vs call_odds_limiter {call_odds_limiter}.")
+        print(f"mult_cc {mult_cc:.2f} vs call_odds_limiter {call_odds_limiter}.")
 
         # Calculate odds
         if mult_cc > call_odds_limiter:
