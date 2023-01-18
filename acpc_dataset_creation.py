@@ -334,6 +334,6 @@ def convert_logs_to_dataset(root_folder):
                             break
 
 
-if __name__ == "__main__"
+if __name__ == "__main__":
     # parse_acpc_log_file("./data/acpc2017/PokerBot5.PokerCNN.1.0.log")
     convert_logs_to_dataset("./data/acpc2017/")
