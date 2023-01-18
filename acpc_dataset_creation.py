@@ -156,7 +156,7 @@ class AcpcLogHand:
             self.valid = False
 
     """
-    Return 3 values: 
+    Return 4 values: 
         hero_res: Multipluyer for winning eg.: 3.25
         villian_cards: Eg.: TsAh
         text: Eg.: "Hero is Big Blind. Big Blind gets Three of Diamonds and Ace of Hearts. Small Blind raises. Big Blind check/calls. "
@@ -265,7 +265,7 @@ class AcpcLogHand:
                 )
 
                 if not res is None:
-                    results.append((res, villian_cards, printed_hand))
+                    results.append((res, villian_cards, street, printed_hand))
 
                 action_in_street += 1
 
@@ -298,8 +298,8 @@ def parse_acpc_log_file(filename, train_f, val_f, test_f):
             samples = hand.print_hands()
 
             for sample in samples:
-                res, villian_cards, printed_hand = sample
-                dst_file.write(f"{res}; {villian_cards}; {printed_hand}\n")
+                res, villian_cards, street, printed_hand = sample
+                dst_file.write(f"{res};{villian_cards};{street};{printed_hand}\n")
                 total_examples += 1
 
     return total_examples
@@ -311,9 +311,9 @@ def convert_logs_to_dataset(root_folder):
     with open("acpc_train.txt", "w") as train_f:
         with open("acpc_val.txt", "w") as val_f:
             with open("acpc_test.txt", "w") as test_f:
-                train_f.write("score;villian_cards;text\n")
-                val_f.write("score;villian_cards;text\n")
-                test_f.write("score;villian_cards;text\n")
+                train_f.write("score;villian_cards;street;text\n")
+                val_f.write("score;villian_cards;street;text\n")
+                test_f.write("score;villian_cards;street;text\n")
 
                 for filename in os.listdir(root_folder):
                     if filename.endswith(".log"):
@@ -327,10 +327,13 @@ def convert_logs_to_dataset(root_folder):
                         print(f"Total examples {total_examples}")
                         # print(filename)
 
-                        if total_examples > 40000000:
+                        total_examples_limit = 40000000
+
+                        if total_examples > total_examples_limit:
+                            print(f"Total examples excedded {total_examples_limit}. Stopping")
                             break
 
 
-if __name__ == "__main""
+if __name__ == "__main__"
     # parse_acpc_log_file("./data/acpc2017/PokerBot5.PokerCNN.1.0.log")
     convert_logs_to_dataset("./data/acpc2017/")

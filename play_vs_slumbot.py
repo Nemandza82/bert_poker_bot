@@ -50,10 +50,10 @@ BIG_BLIND_SIZE = 2 * SMALL_BLIND_SIZE
 
 def pos_string(pos):
     if pos == 0:
-        return PLAYER_SB_STRING
+        return PLAYER_BB_STRING
 
     if pos == 1:
-        return PLAYER_BB_STRING
+        return PLAYER_SB_STRING
 
     return ""
 
