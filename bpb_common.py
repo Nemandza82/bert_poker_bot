@@ -53,3 +53,15 @@ def card_to_sentance(card_str):
         suite = "Diamonds"
 
     return f"{rank} of {suite}"
+
+
+def calc_raise_size(parsed_action):
+    total_last_bet_to = parsed_action['total_last_bet_to']
+
+    # Remaining
+    remaining = STACK_SIZE - total_last_bet_to
+
+    raise_size = total_last_bet_to
+    raise_size = min(raise_size, remaining)
+
+    return raise_size

@@ -2,7 +2,7 @@ import time
 import torch
 from loguru import logger
 from poker_bert_models import BertPokerValueModel
-from bpb_common import ACTION_CC, ACTION_RAISE, STACK_SIZE, BIG_BLIND_SIZE
+from bpb_common import ACTION_CC, ACTION_RAISE, STACK_SIZE, BIG_BLIND_SIZE, calc_raise_size
 
 RAISE_LIMIT_REDUCIONT = 2
 CALL_LIMIT_REDUCIONT = 4
@@ -47,20 +47,10 @@ class BpBBot():
 
         # ----------------------- Evaluate raising first -------------------------
         logger.info("Evaluate raising first")
-        total_last_bet_to = parsed_action['total_last_bet_to']
-
-        # Remaining
-        remaining = STACK_SIZE - total_last_bet_to
-
-        # If there is to raise
-        
-        logger.info(f"Remaining is {remaining}")
 
         # Now consider full raise
-        raise_size = total_last_bet_to
-        raise_size = min(raise_size, remaining)
-
-        raise_odds_limiter = raise_size / (total_last_bet_to + raise_size)
+        raise_size = calc_raise_size(parsed_action)
+        raise_odds_limiter = raise_size / (parsed_action['total_last_bet_to'] + raise_size)
 
         # HACk ----------
         raise_odds_limiter /= RAISE_LIMIT_REDUCIONT
@@ -73,7 +63,7 @@ class BpBBot():
         if mult_raise >= raise_odds_limiter:
             logger.info(f"mult_raise is > raise_odds_limiter")
 
-            if remaining == 0:
+            if raise_size == 0:
                 logger.info("There is no money to raise: Just call")
                 return "c"
 
@@ -96,7 +86,7 @@ class BpBBot():
             if min_bet_size > remaining:
                 min_bet_size = remaining
 
-            calc_bet_size = round((total_last_bet_to * mult_raise) / (1 - mult_raise))
+            calc_bet_size = round((parsed_action['total_last_bet_to'] * mult_raise) / (1 - mult_raise))
 
             logger.info(f"Calc bet size is {calc_bet_size}")
 
@@ -124,7 +114,7 @@ class BpBBot():
         call_size = parsed_action["last_bet_size"]
         logger.info(f"We need to call {call_size}")
 
-        call_odds_limiter = call_size / total_last_bet_to
+        call_odds_limiter = call_size / parsed_action['total_last_bet_to']
 
         # HACk ----------
         call_odds_limiter /= CALL_LIMIT_REDUCIONT

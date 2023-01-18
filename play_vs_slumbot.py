@@ -32,10 +32,11 @@
 import requests
 import sys
 import argparse
+import random
 from loguru import logger
 from datetime import datetime
 from bpb_common import SMALL_BLIND_SIZE, STACK_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD, PLAYER_SB_STRING, PLAYER_BB_STRING
-from bpb_common import card_to_sentance
+from bpb_common import card_to_sentance, calc_raise_size
 from bpb_bot import BpBBot
 
 
@@ -302,6 +303,29 @@ def Act(token, action):
         sys.exit(-1)
         
     return r
+
+
+def random_bot(parsed_action):
+    raise_size = calc_raise_size(parsed_action)
+
+    if parsed_action['last_bettor'] == "":
+        # Not forced action: can k or b
+        if random.randint(0, 100) < 70:
+            return f"b{parsed_action['street_last_bet_to'] + raise_size}"
+        else:
+            return "k"
+    else:
+        # Forced action: can c, b, or f
+        if random.randint(0, 100) < 70:
+            if raise_size > 0:
+                return f"b{parsed_action['street_last_bet_to'] + raise_size}"
+            else:
+                return "c"
+        else:
+            return "f"
+
+    return "f"
+
     
 def PlayHand(token, bot):
     r = NewHand(token)
@@ -344,8 +368,10 @@ def PlayHand(token, bot):
             logger.error('Error parsing action %s: %s' % (action, parsed_action['error']))
             sys.exit(-1)
         
-        # This sample program implements a naive strategy of "always check or call".
-        incr = bot.play_hand(parsed_action)
+        #incr = bot.play_hand(parsed_action)
+
+        # This sample program implements a naive strategy
+        incr = random_bot(parsed_action)
         
         logger.info('Sending incremental action: %s' % incr)
         r = Act(token, incr)

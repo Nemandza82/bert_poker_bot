@@ -26,6 +26,8 @@ TEST_ROWS = 192*1024
 BATCH_SIZE = 1024
 MINI_BATCH_SIZE = 4
 
+TRAIN_STREET = 0 # Pre FLop
+
 
 
 def forward_pass(model, input_data, correct_label, criterion, device):
@@ -48,7 +50,7 @@ def train_worker(result_dict, model, train_batch_df, device_id):
     try:
         torch.cuda.set_device(device_id)
 
-        nrows = len(train_batch_df.index)
+        nrows = len(train_batch_df)
         train_dataset = AcpcDataset(train_batch_df, model)
 
         #logger.info(f"Running training on device {device_id}.")
@@ -128,7 +130,7 @@ def weight_normalizer(models) -> torch.nn.Module:
 
 def train(model, train_dataset_path, val_dataset_path, epochs):
 
-    val_df = load_random_df(val_dataset_path, TEST_ROWS)
+    val_df = load_random_df(val_dataset_path, TEST_ROWS, TRAIN_STREET)
     val_dataset = AcpcDataset(val_df, model)
 
     num_cuda_devices = torch.cuda.device_count()
@@ -136,13 +138,13 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
     for epoch_num in range(epochs):
         
         logger.info(f"")
-        logger.info(f"Starting epoch {epoch_num}")
+        logger.info(f"Starting epoch {epoch_num}. Training street {TRAIN_STREET}")
         logger.info(f"Loading random train rows {TRAIN_ROWS}")
         logger.info(f"Batch size {BATCH_SIZE}")
         logger.info(f"Validation rows {TEST_ROWS}")
         logger.info(f"Num CUDA devices {num_cuda_devices}")
 
-        train_df = load_random_df(train_dataset_path, TRAIN_ROWS)
+        train_df = load_random_df(train_dataset_path, TRAIN_ROWS, TRAIN_STREET)
         num_batches = TRAIN_ROWS // BATCH_SIZE
 
         total_loss_train = []
@@ -173,7 +175,7 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
                     result_dict = manager.dict()
 
                     skip_rows = batch_id * BATCH_SIZE + device_id * nrows
-                    train_batch_df = train_df.iloc[skip_rows:skip_rows+nrows]
+                    train_batch_df = train_df[skip_rows:skip_rows+nrows]
 
                     process = multiprocessing.Process(
                         target=train_worker,
@@ -304,6 +306,6 @@ if __name__ == "__main__":
         train(model, "data/acpc_train.txt", "data/acpc_val.txt", EPOCHS)
 
     # Evaluate model
-    test_df = load_random_df("data/acpc_test.txt", TEST_ROWS)
+    test_df = load_random_df("data/acpc_test.txt", TEST_ROWS, TRAIN_STREET)
     test = AcpcDataset(df, model)
     evaluate(model, test)
