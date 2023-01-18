@@ -276,6 +276,7 @@ class AcpcLogHand:
 
 def parse_acpc_log_file(filename, train_f, val_f, test_f):
     total_examples = 0
+    total_examples_per_street = [0, 0, 0, 0]
 
     with open(filename) as f:
         lines = f.readlines()
@@ -301,12 +302,14 @@ def parse_acpc_log_file(filename, train_f, val_f, test_f):
                 res, villian_cards, street, printed_hand = sample
                 dst_file.write(f"{res};{villian_cards};{street};{printed_hand}\n")
                 total_examples += 1
+                total_examples_per_street[street] += 1
 
-    return total_examples
+    return total_examples, total_examples_per_street
 
 
 def convert_logs_to_dataset(root_folder):
     total_examples = 0
+    total_examples_per_street = [0, 0, 0, 0]
 
     with open("acpc_train.txt", "w") as train_f:
         with open("acpc_val.txt", "w") as val_f:
@@ -319,15 +322,20 @@ def convert_logs_to_dataset(root_folder):
                     if filename.endswith(".log"):
                         print(f"Parsing {root_folder}{filename} ")
 
-                        examples = parse_acpc_log_file(
+                        examples, examples_per_street = parse_acpc_log_file(
                             f"{root_folder}{filename}", train_f, val_f, test_f
                         )
-                        total_examples += examples
 
-                        print(f"Total examples {total_examples}")
+                        total_examples += examples
+                        total_examples_per_street[0] += examples_per_street[0]
+                        total_examples_per_street[1] += examples_per_street[1]
+                        total_examples_per_street[2] += examples_per_street[2]
+                        total_examples_per_street[3] += examples_per_street[3]
+
+                        print(f"Total examples {total_examples}. Per street {total_examples_per_street}")
                         # print(filename)
 
-                        total_examples_limit = 40000000
+                        total_examples_limit = 60000000
 
                         if total_examples > total_examples_limit:
                             print(f"Total examples excedded {total_examples_limit}. Stopping")

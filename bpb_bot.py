@@ -4,6 +4,9 @@ from loguru import logger
 from poker_bert_models import BertPokerValueModel
 from bpb_common import ACTION_CC, ACTION_RAISE, STACK_SIZE, BIG_BLIND_SIZE
 
+RAISE_LIMIT_REDUCIONT = 2
+CALL_LIMIT_REDUCIONT = 4
+
 
 class BpBBot():
     def __init__(self, model_path, device_string):
@@ -60,14 +63,14 @@ class BpBBot():
         raise_odds_limiter = raise_size / (total_last_bet_to + raise_size)
 
         # HACk ----------
-        raise_odds_limiter /= 2
-        logger.info(f"HACk: reducing raise_odds_limiter to half {raise_odds_limiter}")
+        raise_odds_limiter /= RAISE_LIMIT_REDUCIONT
+        logger.info(f"HACk: reducing raise_odds_limiter by {RAISE_LIMIT_REDUCIONT} {raise_odds_limiter}")
 
         logger.info(f"Evaluate full raise size {raise_size}.")
         logger.info(f"mult_raise {mult_raise:.2f} vs raise_odds_limiter {raise_odds_limiter}.")
 
         # Calculate raise odds
-        if mult_raise > raise_odds_limiter:
+        if mult_raise >= raise_odds_limiter:
             logger.info(f"mult_raise is > raise_odds_limiter")
 
             if remaining == 0:
@@ -102,7 +105,7 @@ class BpBBot():
                     logger.info("There is no money to raise: Just call")
                     return "c"
 
-                return f"b{parsed_action['street_last_bet_to'] + min_bet_size}"
+                return f"b{parsed_action['street_last_bet_to'] + calc_bet_size}"
 
             logger.info(f"Smaller than min_bet_size {min_bet_size}")
 
@@ -117,19 +120,19 @@ class BpBBot():
         if mult_cc < 0:
             logger.info(f"We need to put money in but we have negative mult_cc {mult_cc:.2f}: fold")
             return "f"
-        else:
-            logger.info("mult_cc >= 0: call")
-            return "c"
 
         call_size = parsed_action["last_bet_size"]
         logger.info(f"We need to call {call_size}")
 
         call_odds_limiter = call_size / total_last_bet_to
 
+        # HACk ----------
+        call_odds_limiter /= CALL_LIMIT_REDUCIONT
+        logger.info(f"HACk: reducing call_odds_limiter by {CALL_LIMIT_REDUCIONT}: {call_odds_limiter}")
         logger.info(f"mult_cc {mult_cc:.2f} vs call_odds_limiter {call_odds_limiter}.")
 
         # Calculate odds
-        if mult_cc > call_odds_limiter:
+        if mult_cc >= call_odds_limiter:
             logger.info("Positive odds for calling")
             return "c"
         

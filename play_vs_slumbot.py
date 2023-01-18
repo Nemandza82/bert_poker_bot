@@ -41,8 +41,8 @@ from bpb_bot import BpBBot
 
 host = 'slumbot.com'
 BOT_CHECKPOINT = "./models/bert_train_002m_val_0641.zip"
-#BOT_DEVICE = "cpu"
-BOT_DEVICE = "cuda:0"
+BOT_DEVICE = "cpu"
+#BOT_DEVICE = "cuda:0"
 
 NUM_STREETS = 4
 BIG_BLIND_SIZE = 2 * SMALL_BLIND_SIZE
