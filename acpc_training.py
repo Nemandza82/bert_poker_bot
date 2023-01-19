@@ -297,7 +297,7 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_train_002m_val_0641.zip")
+    model.load_from_checkpoint("./models/bert_train_002m_val_0644.zip")
 
     do_train = True
 
