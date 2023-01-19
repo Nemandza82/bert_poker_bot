@@ -29,10 +29,21 @@
 # Slumbot plays with blinds of 50 and 100 and a stack size of 200 BB (20,000 chips).  The stacks
 # reset after each hand.
 
+# Random bot results
+# session_total = -2054750 - 665350 - 1081350 - 198700 = 4000150
+# number of hands = 10009 + 4524 + 4648 + 1576 = 20757
+# -198 bb per 100 hands
+
+# Calling bot results:
+# session_total = -310200 -1012050 -19000 = 1341250
+# number of hands = 2451 + 6132 + 405 = 8988
+# -149 bb per 100 hands
+
 import requests
 import sys
 import argparse
 import random
+import time
 from loguru import logger
 from datetime import datetime
 from bpb_common import SMALL_BLIND_SIZE, STACK_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD, PLAYER_SB_STRING, PLAYER_BB_STRING
@@ -41,7 +52,7 @@ from bpb_bot import BpBBot
 
 
 host = 'slumbot.com'
-BOT_CHECKPOINT = "./models/bert_train_002m_val_0641.zip"
+BOT_CHECKPOINT = "./models/bert_train_002m_val_0644.zip"
 BOT_DEVICE = "cpu"
 #BOT_DEVICE = "cuda:0"
 
@@ -326,6 +337,20 @@ def random_bot(parsed_action):
 
     return "f"
 
+
+def calling_bot(parsed_action):
+    if parsed_action['last_bettor'] == "":
+        return "k"
+    else:
+        return "c"
+
+
+def folding_bot(parsed_action):
+    if parsed_action['last_bettor'] == "":
+        return "k"
+    else:
+        return "f"
+
     
 def PlayHand(token, bot):
     r = NewHand(token)
@@ -371,7 +396,9 @@ def PlayHand(token, bot):
         #incr = bot.play_hand(parsed_action)
 
         # This sample program implements a naive strategy
-        incr = random_bot(parsed_action)
+        #incr = random_bot(parsed_action)
+        #incr = calling_bot(parsed_action)
+        incr = folding_bot(parsed_action)
         
         logger.info('Sending incremental action: %s' % incr)
         r = Act(token, incr)
@@ -448,7 +475,13 @@ def main():
 
     
 if __name__ == '__main__':
-    date = datetime.now().strftime("%m-%d-%Y_%H:%M")
-    logger.add(f"./logs/play_log_{date}.txt")
 
-    main()
+    while True:
+        try:
+            date = datetime.now().strftime("%m-%d-%Y_%H:%M")
+            logger.add(f"./logs/play_log_{date}.txt")
+            main()
+
+        except:
+            logger.info(f"Exception happened. Sleeping and trying again.")
+            time.sleep(60)
