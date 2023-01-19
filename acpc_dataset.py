@@ -40,7 +40,7 @@ def load_random_df(path, nrows, street=-1):
     line_count = 0
     start = time.time()
 
-    with open(path, 'r') as fp:
+    with open(path, 'r', buffering=1000000) as fp:
         # Skip first line its header
         fp.readline()
 
@@ -55,13 +55,13 @@ def load_random_df(path, nrows, street=-1):
     logger.info(f"{line_count} number of lines counted in street {street} for {duration:.2f}s")
 
     line_prob = nrows / line_count
-    print(f"Take each line with prob {line_prob:.2f}")
+    logger.info(f"Take each line with prob {line_prob:.2f}")
 
     start = time.time()
     df = []
 
     while len(df) < nrows:
-        with open(path, 'r') as fp:
+        with open(path, 'r', buffering=1000000) as fp:
 
             # Skip first line its header
             fp.readline()
