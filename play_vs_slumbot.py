@@ -240,8 +240,8 @@ def main():
 
     # Create Bot
     #bot = BpBBot(BOT_CHECKPOINT, BOT_DEVICE) 
-    bot = RandomBot()
-    #bot = CallingBot()
+    #bot = RandomBot()
+    bot = CallingBot()
     #bot = FoldingBot()
     
     for h in range(num_hands):

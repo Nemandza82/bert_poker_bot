@@ -40,7 +40,7 @@ class PokerGym():
         return res
 
 
-    def player_id(position_string):
+    def player_id(self, position_string):
         pid = 0
 
         # Find bot who plays
@@ -58,7 +58,7 @@ class PokerGym():
         state = self.get_state(player_id, hole_cards, board, actions)
         logger.info(f"state {state}")
 
-        incr = bots[player_id].next(state)
+        incr = self.bots[player_id].next(state)
         return incr
 
 
@@ -113,9 +113,14 @@ class PokerGym():
         actions = ""
         board = []
 
+        # This is needed pre flop since BB can play if SB calls
+        big_blind_played = False
+
         # At beggining of hand take the blinds from players
         stacks[self.player_id(PLAYER_SB_STRING)] -= SMALL_BLIND_SIZE
         stacks[self.player_id(PLAYER_BB_STRING)] -= BIG_BLIND_SIZE
+
+        logger.info(f"Stacks {stacks}")
 
         # Put that money in pot
         pot = SMALL_BLIND_SIZE + BIG_BLIND_SIZE
@@ -129,18 +134,19 @@ class PokerGym():
             # At the beggining of street draw cards
             if street == STREET_FLOP:
                 drawn_cards = deck.draw(3)
-                board += drawn_cards
-                logger.info(f"Flop: {Card.ints_to_pretty_str(drawn_cards)}")
+                board = drawn_cards
                 
             elif street == STREET_TURN:
-                drawn_cards += deck.draw(1)
+                drawn_cards = deck.draw(1)
                 board += drawn_cards
-                logger.info(f"Turn: {Card.ints_to_pretty_str(drawn_cards)}")
 
             elif street == STREET_RIVER:
-                drawn_cards += deck.draw(1)
+                drawn_cards = deck.draw(1)
                 board += drawn_cards
-                logger.info(f"River: {Card.ints_to_pretty_str(drawn_cards)}")
+
+            num_checks_in_street = 0
+
+            logger.info(f"Board: {Card.ints_to_pretty_str(board)}")
             
             # If there is no money to bet just go to next street
             # If there is money to bet in stacks then play the street
@@ -152,8 +158,11 @@ class PokerGym():
                 # Ammount to call
                 ammount_to_call = stacks[player_id] - stacks[other_bot_id]
 
-                incr = self.play_action(self, player_id, hole_cards, board, actions)
+                incr = self.play_action(player_id, hole_cards, board, actions)
                 logger.info(f"{next_to_play} {incr}")
+
+                if next_to_play == PLAYER_BB_STRING:
+                    big_blind_played = True
 
                 if incr == "f":
                     if ammount_to_call == 0:
@@ -178,13 +187,41 @@ class PokerGym():
                     # Increese the pot
                     pot += ammount_to_call
 
-                    if ammount_to_call > 0:
-                        # Go to next street. In next street BB is playing first
-                        break
+                    logger.info(f"ammount_to_call {ammount_to_call}")
+
+                    if street == STREET_PRE_FLOP:
+
+                        if ammount_to_call > 0:
+                            if big_blind_played:
+                                logger.info(f"{next_to_play} called {ammount_to_call} and BB already played. Go to next street.")
+                                break
+                            else:
+                                # BB must be asked pre flop even if SB only calls
+                                logger.info(f"{next_to_play} called. BB must be asked pre flop even if SB only calls.")
+                                next_to_play = self.other_player(next_to_play)
+
+                        else:
+                            logger.info(f"{next_to_play} Checked a call. Go to next street.")
+                            break
 
                     else:
-                        # This player checks. Other player is asked.
-                        next_to_play = self.other_player(next_to_play)
+                        # Other streets
+                        if ammount_to_call > 0:
+                            # Player called a bet. Go to next street.
+                            logger.info(f"After flop called {ammount_to_call}. So going to next street.")
+                            break
+
+                        else:
+                            num_checks_in_street += 1
+
+                            if num_checks_in_street == 1:
+                                # This player checks. Other player is asked.
+                                logger.info(f"This player checks. Other player is asked..")
+                                next_to_play = self.other_player(next_to_play)
+
+                            else:
+                                logger.info(f"Check check. So go to next street")
+                                break
 
                 else:
 
@@ -199,7 +236,7 @@ class PokerGym():
                         time.sleep(1)
                         continue
 
-                    if incr[0] != "r":
+                    if incr[0] != "r" and incr[0] != "b":
                         logger.warning(f"Returned action must be raise. Try again.")
                         time.sleep(1)
                         continue
@@ -217,6 +254,8 @@ class PokerGym():
                         time.sleep(1)
                         continue
 
+                    print(f"Raise ammount {raise_ammount}")
+
                     # Finally raise
                     actions += incr
                     stacks[player_id] = stacks_at_start_of_street[player_id] - raise_ammount
@@ -225,12 +264,14 @@ class PokerGym():
                     # This player raises. Other player is asked.
                     next_to_play = self.other_player(next_to_play)
 
-                    logger.info(f"stacks {stacks}. pot {pot}")
+                    logger.info(f"Stacks are {stacks}. Pot is {pot}")
 
                     # raise_ammount in beagining of each street is "raise by". (eg r100) player adds 100 to pot
                     # in same street re-rease is "raise to". Eg r100r300
 
             # Incr street
+            logger.info(f"Going to next street.")
+
             street += 1
             next_to_play = PLAYER_BB_STRING
             stacks_at_start_of_street = stacks.copy()
@@ -247,6 +288,8 @@ class PokerGym():
         self.session_num_hands = 0
 
         while self.session_num_hands < num_hands:
+            logger.info(f"Playing {self.session_num_hands} hand. ----------------------------")
+
             self.session_num_hands += 1
             self.play_hand()
 
@@ -293,6 +336,7 @@ class CallingBot():
 
     def next(self, state):
         parsed_action = parse_action(state)
+        logger.info(f"parsed_action {parsed_action}")
 
         if parsed_action['last_bettor'] == "":
             return "k"
@@ -309,6 +353,7 @@ class FoldingBot():
 
     def next(self, state):
         parsed_action = parse_action(state)
+        logger.info(f"parsed_action {parsed_action}")
 
         if parsed_action['last_bettor'] == "":
             return "k"
@@ -326,6 +371,7 @@ class RandomBot():
     def next(self, state):
         parsed_action = parse_action(state)
 
+        logger.info(f"parsed_action {parsed_action}")
         raise_size, remaining = calc_raise_size(parsed_action)
 
         if parsed_action['last_bettor'] == "":
@@ -351,6 +397,10 @@ class RandomBot():
 
 
 if __name__ == "__main__":
-    deck = Deck()
 
-    print(deck.draw())
+    random_bot = RandomBot()
+    calling_bot = CallingBot()
+
+    gym = PokerGym(random_bot, calling_bot, "RandomBot", "CallingBot")
+
+    gym.play_hands(10)
