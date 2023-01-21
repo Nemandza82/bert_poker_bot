@@ -1,8 +1,10 @@
 import time
 import torch
+import os
 from loguru import logger
 from poker_bert_models import BertPokerValueModel
 from bpb_common import ACTION_CC, ACTION_RAISE, STACK_SIZE, BIG_BLIND_SIZE, calc_raise_size
+from bpb_common import parse_action
 
 RAISE_LIMIT_REDUCIONT = 2
 CALL_LIMIT_REDUCIONT = 4
@@ -11,7 +13,11 @@ CALL_LIMIT_REDUCIONT = 4
 class BpBBot():
     def __init__(self, model_path, device_string):
         self.model = BertPokerValueModel()
-        self.model.load_from_checkpoint(model_path)
+
+        if os.path.isfile(model_path):
+            self.model.load_from_checkpoint(model_path)
+        else:
+            logger.warning(f"Did not laod model {model_path}. File does not exist.")
 
         self.device = torch.device(device_string)
         self.model = self.model.to(self.device)
@@ -23,7 +29,9 @@ class BpBBot():
      Turn is King of Clubs. Small Blind raises. Big Blind check/calls. River is Six of Spades. Small Blind raises. ',
       'street_last_bet_to': 1800, 'total_last_bet_to': 3600, 'last_bet_size': 1800, 'last_bettor': 'Small Blind'}
     """
-    def play_hand(self, parsed_action):
+    def next(self, state):
+
+        parsed_action = parse_action(state)
 
         sentance_cc = parsed_action['sentance'] + f"{parsed_action['hero']} {ACTION_CC}."
         sentance_raise = parsed_action['sentance'] + f"{parsed_action['hero']} {ACTION_RAISE}."
@@ -49,7 +57,7 @@ class BpBBot():
         logger.info("Evaluate raising first")
 
         # Now consider full raise
-        raise_size = calc_raise_size(parsed_action)
+        raise_size, remaining = calc_raise_size(parsed_action)
         raise_odds_limiter = raise_size / (parsed_action['total_last_bet_to'] + raise_size)
 
         # HACk ----------
@@ -128,6 +136,10 @@ class BpBBot():
         
         logger.info("Only we can do is fold")
         return "f"
+
+
+    def hand_finished(self, state):
+        x = 1
 
 
 
