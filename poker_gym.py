@@ -76,7 +76,7 @@ class PokerGym():
         hand_winnings = [0, 0]
 
         hand_winnings[won_id] = stacks[won_id] + pot - STACK_SIZE
-        hand_winnings[lost_id] = STACK_SIZE - stacks[lost_id]
+        hand_winnings[lost_id] = stacks[lost_id] - STACK_SIZE
 
         # Inform each bot of new state
         for i in range(len(self.bots)):
