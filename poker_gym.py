@@ -116,6 +116,9 @@ class PokerGym():
         pot = SMALL_BLIND_SIZE + BIG_BLIND_SIZE
 
         logger.info(f"Stacks: {stacks}. Pot: {pot}")
+        logger.info(f"{self.bot_names[0]} ({self.positions[0]}) gets {[Card.int_to_str(card) for card in hole_cards[0]]}")
+        logger.info(f"{self.bot_names[1]} ({self.positions[1]}) gets {[Card.int_to_str(card) for card in hole_cards[1]]}")
+
 
         # Small blind plays first at pre flop
         next_to_play = PLAYER_SB_STRING
@@ -138,7 +141,8 @@ class PokerGym():
 
             num_checks_in_street = 0
 
-            logger.info(f"Board: {Card.ints_to_pretty_str(board)}")
+            if street > STREET_PRE_FLOP:
+                logger.info(f"Board: {Card.ints_to_pretty_str(board)}")
             
             # If there is no money to bet just go to next street
             # If there is money to bet in stacks then play the street
@@ -271,16 +275,23 @@ class PokerGym():
             if street <= STREET_RIVER:
                 actions += "/"
 
-        logger.info(f"Showdown: {self.bot_names[0]}: {hole_cards[0]} {self.bot_names[1]}: {hole_cards[1]}. Board: {board}")
+        logger.info(f"Showdown: {self.bot_names[0]}: {[Card.int_to_str(card) for card in hole_cards[0]]} {self.bot_names[1]}: {[Card.int_to_str(card) for card in hole_cards[1]]}.")
+        logger.info(f"Board: {[Card.int_to_str(card) for card in board]}")
 
+        # Hand strength is valued on a scale of 1 to 7462, where 1 is a Royal Flush and 7462 is unsuited 7-5-4-3-2
+        # as there are only 7642 distinctly ranked hands in poker.
         s0 = evaluator.evaluate(board, hole_cards[0])
-        s1 = evaluator.evaluate(board, hole_cards[0])
+        s1 = evaluator.evaluate(board, hole_cards[1])
 
-        logger.info(f"Showdown: {self.bot_names[0]}: {s0} {self.bot_names[1]}: {s1}")
+        p0_class = evaluator.get_rank_class(s0)
+        p1_class = evaluator.get_rank_class(s1)
+
+        logger.info(f"{self.bot_names[0]}: {s0} {evaluator.class_to_string(p0_class)}")
+        logger.ingo(f"{self.bot_names[1]}: {s1} {evaluator.class_to_string(p1_class)}")
 
         if s0 == s1:
             logger.info(f"Pot is split. Money returned to players")
-        elif s0 > s1:
+        elif s0 < s1:
             logger.info(f"{self.bot_names[0]} won")
             self.finish_hand(0, hole_cards, board, actions, stacks, pot)
         else:
