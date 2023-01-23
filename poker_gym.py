@@ -287,7 +287,7 @@ class PokerGym():
         p1_class = evaluator.get_rank_class(s1)
 
         logger.info(f"{self.bot_names[0]}: {s0} {evaluator.class_to_string(p0_class)}")
-        logger.ingo(f"{self.bot_names[1]}: {s1} {evaluator.class_to_string(p1_class)}")
+        logger.info(f"{self.bot_names[1]}: {s1} {evaluator.class_to_string(p1_class)}")
 
         if s0 == s1:
             logger.info(f"Pot is split. Money returned to players")
