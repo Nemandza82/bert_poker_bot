@@ -298,6 +298,8 @@ class PokerGym():
             self.positions[0] = self.positions[1]
             self.positions[1] = tmp
 
+            logger.info(f"{self.bot_names}. Winnings {self.winnings}")
+
 
 class RandomBot():
     def __init__(self):
@@ -403,4 +405,4 @@ if __name__ == "__main__":
 
     gym = PokerGym(random_bot, calling_bot, "RandomBot", "CallingBot")
 
-    gym.play_hands(10)
+    gym.play_hands(1000)
