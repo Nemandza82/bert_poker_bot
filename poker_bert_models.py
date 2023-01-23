@@ -8,7 +8,7 @@ Input is sentance describing poker hand state. Output is tanh of learned multipl
 Hero input money in pot.
 """
 class BertPokerValueModel(torch.nn.Module):
-    def __init__(self, dropout=0.01):
+    def __init__(self, dropout=0.5):
         super(BertPokerValueModel, self).__init__()
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
@@ -16,7 +16,7 @@ class BertPokerValueModel(torch.nn.Module):
         self.bert = BertModel.from_pretrained("bert-base-cased")
         self.dropout = torch.nn.Dropout(dropout)
         self.linear = torch.nn.Linear(768, 1)
-        self.tanh = torch.nn.Tanh()
+        #self.tanh = torch.nn.Tanh()
 
 
     def forward(self, tokenized_input_data, device):
@@ -30,7 +30,8 @@ class BertPokerValueModel(torch.nn.Module):
 
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear(dropout_output)
-        final_layer = self.tanh(linear_output)
+        #final_layer = self.tanh(linear_output)
+        final_layer = linear_output
 
         return final_layer
 
@@ -40,18 +41,21 @@ class BertPokerValueModel(torch.nn.Module):
     Returns multiplier of Hero's invested money in pot.
     """
     def run_inference(self, sentance, device):
-        input_data = self.tokenize(sentance)
-        
-        output = self.forward(input_data, device)
-        x = output.item()
+        with torch.no_grad():
+            input_data = self.tokenize(sentance)
+            
+            output = self.forward(input_data, device)
+            return output.item()
+            
+            #x = output.item()
 
-        if x > 0.99:
-            x = 0.99
+            #if x > 0.99:
+            #    x = 0.99
 
-        if x < -0.99:
-            x = -0.99
+            #if x < -0.99:
+            #    x = -0.99
 
-        return math.atanh(x)
+            #return math.atanh(x)
         
 
     def load_from_checkpoint(self, model_path):

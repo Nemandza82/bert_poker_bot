@@ -39,6 +39,11 @@
 # number of hands = 2451 + 6132 + 405 = 8988
 # -149 bb per 100 hands
 
+# Folding bot results:
+# session total = -508900
+# number of hands = 7503
+# -67 bb per 100 hands
+
 import requests
 import sys
 import argparse

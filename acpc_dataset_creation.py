@@ -231,9 +231,8 @@ class AcpcLogHand:
         hero_pot = sb_pot if player == PLAYER_SB_STRING else bb_pot
 
         # We are learning how much hero pot is multiplied.
-        # hero_pot is returned to hero and he earns hero_res in addition
         # This way we are learning implyed odds
-        hero_res = (hero_res + hero_pot) / hero_pot
+        hero_res = hero_res / hero_pot
 
         # Get in (-1, 1) range to be better for learning
         # (We are doing that now during training) -> Commented out

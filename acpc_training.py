@@ -14,7 +14,7 @@ from statistics import mean
 DATETIME_FORMAT = "%m-%d-%Y_%H:%M"
 
 EPOCHS = 20
-LEARNING_RATE = 1e-6
+LEARNING_RATE = 1e-5
 
 TRAIN_ROWS = 10*1024*1024 # 10 miliona
 TEST_ROWS = 128*1024
@@ -26,7 +26,7 @@ TEST_ROWS = 192*1024
 BATCH_SIZE = 1024
 MINI_BATCH_SIZE = 4
 
-TRAIN_STREET = 0 # Pre FLop
+TRAIN_STREET = 3 # River
 
 
 
@@ -297,7 +297,7 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_train_002m_val_0644.zip")
+    model.load_from_checkpoint("./models/bert_train_006m_val_0691.zip")
 
     do_train = True
 

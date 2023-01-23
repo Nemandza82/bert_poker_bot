@@ -102,7 +102,8 @@ class AcpcDataset(torch.utils.data.Dataset):
         # print(self.labels[idx])
         x = self.labels[idx]
 
-        return np.array(math.tanh(x))
+        #return np.array(math.tanh(x))
+        return np.array(x)
 
     def get_batch_texts(self, idx):
         # Fetch a batch of inputs
