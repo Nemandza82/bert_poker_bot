@@ -58,7 +58,7 @@ from poker_gym import RandomBot, CallingBot, FoldingBot
 
 
 host = 'slumbot.com'
-BOT_CHECKPOINT = "./models/bert_train_002m_val_0644.zip"
+BOT_CHECKPOINT = "./models/bert_train_006m_val_0691.zip"
 BOT_DEVICE = "cpu"
 #BOT_DEVICE = "cuda:0"
 

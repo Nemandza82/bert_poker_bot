@@ -1,14 +1,18 @@
 import time
 import random
+from datetime import datetime
 from loguru import logger
 from treys import Card, Evaluator,  Deck
 from bpb_common import SMALL_BLIND_SIZE, BIG_BLIND_SIZE, STACK_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD
 from bpb_common import PLAYER_SB_STRING, PLAYER_BB_STRING
 from bpb_common import parse_action, calc_raise_size
 from bpb_common import STREET_PRE_FLOP, STREET_FLOP, STREET_TURN, STREET_RIVER, STREET_SHOWDOWN
+from bpb_bot import BpBBot
+
+
+evaluator = Evaluator()
 
 #Card.print_pretty_cards(hand)
-#evaluator = Evaluator()
 #print(evaluator.evaluate(board, hand))
 
 
@@ -68,15 +72,11 @@ class PokerGym():
 
     def finish_hand(self, won_id, hole_cards, board, actions, stacks, pot):
 
+        lost_id = (won_id + 1) % 2
         hand_winnings = [0, 0]
 
-        # If someone won, else 0, 0 (Split pot)
-        if won_id >= 0:
-            lost_id = (won_id + 1) % 2
-            hand_winnings = [0, 0]
-
-            hand_winnings[won_id] = stacks[won_id] + pot - STACK_SIZE
-            hand_winnings[lost_id] = stacks[lost_id] - pot - STACK_SIZE
+        hand_winnings[won_id] = stacks[won_id] + pot - STACK_SIZE
+        hand_winnings[lost_id] = STACK_SIZE - stacks[lost_id]
 
         # Inform each bot of new state
         for i in range(len(self.bots)):
@@ -90,15 +90,7 @@ class PokerGym():
 
             self.bots[i].hand_finished(state)
 
-        logger.info(f"Hand finished.")
-        logger.info(f"{self.bot_names[0]}: {self.winnings[0]}.")
-        logger.info(f"{self.bot_names[1]}: {self.winnings[1]}. ")
-
-
-    def folds(self, player_id, hole_cards, board, actions, stacks, pot):
-
-        won_id = (player_id + 1) % 2
-        self.finish_hand(won_id, hole_cards, board, actions, stacks, pot)
+        logger.info(f"Hand finished. Winnings: {hand_winnings}")
 
 
     def play_hand(self):
@@ -120,10 +112,10 @@ class PokerGym():
         stacks[self.player_id(PLAYER_SB_STRING)] -= SMALL_BLIND_SIZE
         stacks[self.player_id(PLAYER_BB_STRING)] -= BIG_BLIND_SIZE
 
-        logger.info(f"Stacks {stacks}")
-
         # Put that money in pot
         pot = SMALL_BLIND_SIZE + BIG_BLIND_SIZE
+
+        logger.info(f"Stacks: {stacks}. Pot: {pot}")
 
         # Small blind plays first at pre flop
         next_to_play = PLAYER_SB_STRING
@@ -171,7 +163,7 @@ class PokerGym():
                         continue
 
                     actions += "f"
-                    self.folds(player_id, hole_cards, board, actions, stacks, pot)
+                    self.finish_hand(other_bot_id, hole_cards, board, actions, stacks, pot)
 
                     # Finish hand
                     return
@@ -242,7 +234,7 @@ class PokerGym():
                         continue
 
                     try:
-                        raise_ammount = int(incr[1:-1])
+                        raise_ammount = int(incr[1:])
 
                     except:
                         logger.warning(f"Cannot parse raise ammount. Try again.")
@@ -254,7 +246,7 @@ class PokerGym():
                         time.sleep(1)
                         continue
 
-                    print(f"Raise ammount {raise_ammount}")
+                    logger.info(f"Raise ammount {raise_ammount}")
 
                     # Finally raise
                     actions += incr
@@ -278,6 +270,22 @@ class PokerGym():
 
             if street <= STREET_RIVER:
                 actions += "/"
+
+        logger.info(f"Showdown: {self.bot_names[0]}: {hole_cards[0]} {self.bot_names[1]}: {hole_cards[1]}. Board: {board}")
+
+        s0 = evaluator.evaluate(board, hole_cards[0])
+        s1 = evaluator.evaluate(board, hole_cards[0])
+
+        logger.info(f"Showdown: {self.bot_names[0]}: {s0} {self.bot_names[1]}: {s1}")
+
+        if s0 == s1:
+            logger.info(f"Pot is split. Money returned to players")
+        elif s0 > s1:
+            logger.info(f"{self.bot_names[0]} won")
+            self.finish_hand(0, hole_cards, board, actions, stacks, pot)
+        else:
+            logger.info(f"{self.bot_names[1]} won")
+            self.finish_hand(1, hole_cards, board, actions, stacks, pot)
 
 
     def play_hands(self, num_hands):
@@ -400,9 +408,13 @@ class RandomBot():
 
 if __name__ == "__main__":
 
+    date = datetime.now().strftime("%m-%d-%Y_%H:%M")
+    logger.add(f"./logs/play_log_{date}.txt")
+
     random_bot = RandomBot()
     calling_bot = CallingBot()
+    bert_bot = BpBBot("./models/bert_train_006m_val_0691.zip", "cpu") 
 
-    gym = PokerGym(random_bot, calling_bot, "RandomBot", "CallingBot")
+    gym = PokerGym(random_bot, bert_bot, "Random Bot", "Bert Bot")
 
-    gym.play_hands(1000)
+    gym.play_hands(10000)

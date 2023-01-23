@@ -68,8 +68,10 @@ class BpBBot():
         logger.info(f"mult_raise {mult_raise:.2f} vs raise_odds_limiter {raise_odds_limiter}.")
 
         # Calculate raise odds
-        if mult_raise >= raise_odds_limiter:
-            logger.info(f"mult_raise is > raise_odds_limiter")
+        #if mult_raise >= raise_odds_limiter:
+        if mult_raise >= 0:
+            #logger.info(f"mult_raise is > raise_odds_limiter")
+            logger.info(f"mult_raise is > 0")
 
             if raise_size == 0:
                 logger.info("There is no money to raise: Just call")
@@ -130,7 +132,8 @@ class BpBBot():
         logger.info(f"mult_cc {mult_cc:.2f} vs call_odds_limiter {call_odds_limiter}.")
 
         # Calculate odds
-        if mult_cc >= call_odds_limiter:
+        #if mult_cc >= call_odds_limiter:
+        if mult_cc >= 0:
             logger.info("Positive odds for calling")
             return "c"
         
