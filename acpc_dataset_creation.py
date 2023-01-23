@@ -2,7 +2,7 @@ import os
 import random
 import math
 from bpb_common import SMALL_BLIND_SIZE, ACTION_CC, ACTION_RAISE, ACTION_FOLD, PLAYER_SB_STRING, PLAYER_BB_STRING
-from bpb_common import card_to_sentance
+from bpb_common import card_to_sentance, parse_actions
 
 
 
@@ -20,47 +20,6 @@ def parse_cards(cards_str):
         i += 2
 
     return cards
-
-
-# Parsing actions in one street. For instance input is "cr1219f".
-# Last action must be c or f.
-def parse_actions(street_actions_string):
-    i = 0
-    street_actions = []
-
-    while i < len(street_actions_string):
-
-        # Parse fold action
-        if street_actions_string[i] == "f":
-            street_actions.append({"type": ACTION_FOLD})
-            i += 1
-            continue
-
-        # Parse check/call actions
-        if street_actions_string[i] == "c":
-            street_actions.append({"type": ACTION_CC})
-            i += 1
-            continue
-
-        # Parse raise action
-        if street_actions_string[i] == "r":
-            i += 1
-            r_start = i
-
-            # Now parsing raise ammount. Advance until we get to next action. 
-            # Raise ammount can not be last since after raise must be another action
-            while street_actions_string[i] not in ["c", "r", "f"]:
-                i += 1
-
-            # Raise ammount is now between r_start and i
-            r_amount = street_actions_string[r_start:i]
-
-            # We normalize raise ammount by small blind size
-            amount = round(float(r_amount) / SMALL_BLIND_SIZE, 2)
-            street_actions.append({"type": ACTION_RAISE, "amount": amount})
-            continue
-
-    return street_actions
 
 
 def get_player(street, action_idx):
