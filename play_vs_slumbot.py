@@ -44,6 +44,16 @@
 # number of hands = 7503
 # -67 bb per 100 hands
 
+# Raising bot results:
+# sessio total = -3393550
+# number of hands = 8557
+# -398 bb per 100 hands
+
+# Bert Bot (raise first) results
+# session total = -789800 -1690600 = -2,480,400
+# number of hands = 6799 + 8020 = 14,819
+# -167 bb per 100 hands
+
 import requests
 import sys
 import argparse
@@ -54,7 +64,7 @@ from loguru import logger
 from datetime import datetime
 from bpb_common import parse_action
 from bpb_bot import BpBBot
-from poker_gym import RandomBot, CallingBot, FoldingBot
+from poker_gym import RandomBot, CallingBot, FoldingBot, RaisingBot
 
 
 host = 'slumbot.com'
@@ -246,9 +256,10 @@ def main():
     # Create Bot
     #bot = BpBBot(BOT_CHECKPOINT, BOT_DEVICE) 
     #bot = RandomBot()
-    bot = CallingBot()
+    #bot = CallingBot()
     #bot = FoldingBot()
-    
+    bot = RaisingBot()
+
     for h in range(num_hands):
         logger.info(f"Playing hand {h} -------------------------------------------------")
         (token, hand_winnings) = PlayHand(token, bot)
@@ -269,3 +280,4 @@ if __name__ == '__main__':
             traceback.print_exc()
             logger.warning(f"Exception happened. Sleeping and trying again.")
             time.sleep(60)
+

@@ -42,7 +42,7 @@ def forward_pass(model, input_data, correct_label, criterion, device):
         batch_loss = 0
 
     acc = (output * correct_label > 0).sum().item() / MINI_BATCH_SIZE
-    return batch_loss, acc
+    return batch_loss, acc, output
 
 
 def train_worker(result_dict, model, train_batch_df, device_id):
@@ -76,7 +76,7 @@ def train_worker(result_dict, model, train_batch_df, device_id):
 
         for train_input, train_label in train_dataloader:
 
-            batch_loss, acc = forward_pass(
+            batch_loss, acc, _ = forward_pass(
                 model, train_input, train_label, criterion, device_id
             )
 
@@ -249,7 +249,7 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
         with torch.no_grad():
             for val_input, val_label in tqdm(val_dataloader):
 
-                batch_loss, acc = forward_pass(
+                batch_loss, acc, _ = forward_pass(
                     model, val_input, val_label, criterion, validation_dev
                 )
 
@@ -269,18 +269,25 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
 def evaluate(model, test):
 
     device = torch.device("cuda:0")
-    test_dataloader = torch.utils.data.DataLoader(test, batch_size=MINI_BATCH_SIZE)
+    test_dataloader = torch.utils.data.DataLoader(test, batch_size=1)
 
     model = model.to(device)
     total_acc_test = []
+    total_loss_test = []
+
+    criterion = torch.nn.MSELoss()
 
     with torch.no_grad():
         for test_input, test_label in test_dataloader:
 
-            batch_loss, acc = forward_pass(model, test_input, test_label, None, device)
+            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, criterion, device)
             total_acc_test.append(acc)
+            total_loss_test.append(batch_loss)
+
+            print(f"correct_label {test_label.item()} -> predicted label {out_label.item(): .3f}")
 
     logger.info(f"Test Accuracy: {mean(total_acc_test): .3f}")
+    logger.info(f"Test Loss: {mean(total_loss_test): .3f}")
 
 
 if __name__ == "__main__":
@@ -297,9 +304,9 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_train_006m_val_0691.zip")
+    model.load_from_checkpoint("./models/bert_01-31-2023_10:26.zip")
 
-    do_train = True
+    do_train = False
 
     if do_train:
         logger.info("Started training process")
@@ -307,5 +314,5 @@ if __name__ == "__main__":
 
     # Evaluate model
     test_df = load_random_df("data/acpc_test.txt", TEST_ROWS, TRAIN_STREET)
-    test = AcpcDataset(df, model)
+    test = AcpcDataset(test_df, model)
     evaluate(model, test)

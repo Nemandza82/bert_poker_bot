@@ -16,7 +16,6 @@ class BertPokerValueModel(torch.nn.Module):
         self.bert = BertModel.from_pretrained("bert-base-cased")
         self.dropout = torch.nn.Dropout(dropout)
         self.linear = torch.nn.Linear(768, 1)
-        #self.tanh = torch.nn.Tanh()
 
 
     def forward(self, tokenized_input_data, device):
@@ -30,7 +29,6 @@ class BertPokerValueModel(torch.nn.Module):
 
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear(dropout_output)
-        #final_layer = self.tanh(linear_output)
         final_layer = linear_output
 
         return final_layer
@@ -46,16 +44,6 @@ class BertPokerValueModel(torch.nn.Module):
             
             output = self.forward(input_data, device)
             return output.item()
-            
-            #x = output.item()
-
-            #if x > 0.99:
-            #    x = 0.99
-
-            #if x < -0.99:
-            #    x = -0.99
-
-            #return math.atanh(x)
         
 
     def load_from_checkpoint(self, model_path):

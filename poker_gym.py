@@ -417,6 +417,25 @@ class RandomBot():
         self.bla = 1
 
 
+class RaisingBot():
+    def __init__(self):
+        self.bla = 1
+
+    def next(self, state):
+        parsed_action = parse_action(state)
+
+        logger.info(f"parsed_action {parsed_action}")
+        raise_size, remaining = calc_raise_size(parsed_action)
+
+        if raise_size > 0:
+            return f"b{parsed_action['street_last_bet_to'] + raise_size}"
+        else:
+            return "c"
+
+    def hand_finished(self, state):
+        self.bla = 1
+
+
 if __name__ == "__main__":
 
     date = datetime.now().strftime("%m-%d-%Y_%H:%M")
@@ -426,6 +445,6 @@ if __name__ == "__main__":
     calling_bot = CallingBot()
     bert_bot = BpBBot("./models/bert_train_006m_val_0691.zip", "cpu") 
 
-    gym = PokerGym(random_bot, bert_bot, "Random Bot", "Bert Bot")
+    gym = PokerGym(calling_bot, bert_bot, "Random Bot", "Bert Bot")
 
     gym.play_hands(10000)
