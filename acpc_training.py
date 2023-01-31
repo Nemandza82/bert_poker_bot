@@ -26,11 +26,11 @@ TEST_ROWS = 192*1024
 BATCH_SIZE = 1024
 MINI_BATCH_SIZE = 4
 
-TRAIN_STREET = 3 # River
+TRAIN_STREET = 0 # River
 
 
 
-def forward_pass(model, input_data, correct_label, criterion, device):
+def forward_pass(model, input_data, correct_label, criterion, device, mini_batch_size):
     correct_label = correct_label.to(device)
     correct_label = correct_label.unsqueeze(1)
 
@@ -41,7 +41,7 @@ def forward_pass(model, input_data, correct_label, criterion, device):
     else:
         batch_loss = 0
 
-    acc = (output * correct_label > 0).sum().item() / MINI_BATCH_SIZE
+    acc = (output * correct_label > 0).sum().item() / mini_batch_size
     return batch_loss, acc, output
 
 
@@ -74,10 +74,10 @@ def train_worker(result_dict, model, train_batch_df, device_id):
 
         start = time.time()
 
-        for train_input, train_label in train_dataloader:
+        for train_input, train_label, _ in train_dataloader:
 
             batch_loss, acc, _ = forward_pass(
-                model, train_input, train_label, criterion, device_id
+                model, train_input, train_label, criterion, device_id, MINI_BATCH_SIZE
             )
 
             batch_loss = batch_loss / num_mini_batches
@@ -247,10 +247,10 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
         total_acc_val = []
 
         with torch.no_grad():
-            for val_input, val_label in tqdm(val_dataloader):
+            for val_input, val_label, _ in tqdm(val_dataloader):
 
                 batch_loss, acc, _ = forward_pass(
-                    model, val_input, val_label, criterion, validation_dev
+                    model, val_input, val_label, criterion, validation_dev, MINI_BATCH_SIZE
                 )
 
                 total_loss_val.append(batch_loss.item())
@@ -278,13 +278,16 @@ def evaluate(model, test):
     criterion = torch.nn.MSELoss()
 
     with torch.no_grad():
-        for test_input, test_label in test_dataloader:
+        for test_input, test_label, train_text in test_dataloader:
 
-            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, criterion, device)
+            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, criterion, device, 1)
             total_acc_test.append(acc)
-            total_loss_test.append(batch_loss)
+            total_loss_test.append(batch_loss.item())
 
-            print(f"correct_label {test_label.item()} -> predicted label {out_label.item(): .3f}")
+            run_inference_result = model.run_inference(train_text, device)
+
+            #logger.info(f"Input: {train_text}")
+            logger.info(f"correct_label {test_label.item()} -> predicted label {out_label.item(): .3f} : run_inference_result {run_inference_result: .3f}, loss {batch_loss.item(): .3f}, acc {acc: .3f} ")
 
     logger.info(f"Test Accuracy: {mean(total_acc_test): .3f}")
     logger.info(f"Test Loss: {mean(total_loss_test): .3f}")
@@ -304,9 +307,9 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_01-31-2023_10:26.zip")
+    model.load_from_checkpoint("./models/bert_river_14m_val_0776.zip")
 
-    do_train = False
+    do_train = True
 
     if do_train:
         logger.info("Started training process")

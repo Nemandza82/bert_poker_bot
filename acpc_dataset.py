@@ -114,11 +114,11 @@ class AcpcDataset(torch.utils.data.Dataset):
         # print(f"->{text}<-")
         # print(tokenized)
 
-        return tokenized
+        return tokenized, text
 
     def __getitem__(self, idx):
 
-        batch_texts = self.get_batch_texts(idx)
+        batch_texts, texts = self.get_batch_texts(idx)
         batch_y = self.get_batch_labels(idx)
 
-        return batch_texts, batch_y
+        return batch_texts, batch_y, texts
