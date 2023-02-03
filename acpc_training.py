@@ -15,6 +15,7 @@ DATETIME_FORMAT = "%m-%d-%Y_%H:%M"
 
 EPOCHS = 20
 LEARNING_RATE = 1e-5
+CLAMP_LOSS = True
 
 TRAIN_ROWS = 10*1024*1024 # 10 miliona
 TEST_ROWS = 128*1024
@@ -29,18 +30,23 @@ MINI_BATCH_SIZE = 4
 TRAIN_STREET = 0 # River
 
 
-
-def forward_pass(model, input_data, correct_label, criterion, device, mini_batch_size):
+def forward_pass(model, input_data, correct_label, device, mini_batch_size):
     correct_label = correct_label.to(device)
     correct_label = correct_label.unsqueeze(1)
 
     output = model(input_data, device)
 
-    if criterion is not None:
-        batch_loss = criterion(output, correct_label.float())
-    else:
-        batch_loss = 0
+    criterion = torch.nn.MSELoss(reduction = 'none')
+    batch_loss = criterion(output, correct_label.float())
 
+    # Clamp to -1 - 1
+    if CLAMP_LOSS:
+        batch_loss = torch.clamp(batch_loss, min=-1, max=1)
+
+    # Average across mini batch
+    batch_loss = batch_loss.sum() / mini_batch_size
+
+    # Calc accuracy
     acc = (output * correct_label > 0).sum().item() / mini_batch_size
     return batch_loss, acc, output
 
@@ -69,7 +75,6 @@ def train_worker(result_dict, model, train_batch_df, device_id):
         model.to(device_id)
         copy_model_to_device_time = time.time() - start
 
-        criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
         start = time.time()
@@ -77,7 +82,7 @@ def train_worker(result_dict, model, train_batch_df, device_id):
         for train_input, train_label, _ in train_dataloader:
 
             batch_loss, acc, _ = forward_pass(
-                model, train_input, train_label, criterion, device_id, MINI_BATCH_SIZE
+                model, train_input, train_label, device_id, MINI_BATCH_SIZE
             )
 
             batch_loss = batch_loss / num_mini_batches
@@ -241,7 +246,6 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
         # Run validation
         logger.info(f"Running validation")
         val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=MINI_BATCH_SIZE)
-        criterion = torch.nn.MSELoss()
 
         total_loss_val = []
         total_acc_val = []
@@ -250,7 +254,7 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
             for val_input, val_label, _ in tqdm(val_dataloader):
 
                 batch_loss, acc, _ = forward_pass(
-                    model, val_input, val_label, criterion, validation_dev, MINI_BATCH_SIZE
+                    model, val_input, val_label, validation_dev, MINI_BATCH_SIZE
                 )
 
                 total_loss_val.append(batch_loss.item())
@@ -275,12 +279,10 @@ def evaluate(model, test):
     total_acc_test = []
     total_loss_test = []
 
-    criterion = torch.nn.MSELoss()
-
     with torch.no_grad():
         for test_input, test_label, train_text in test_dataloader:
 
-            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, criterion, device, 1)
+            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, device, 1)
             total_acc_test.append(acc)
             total_loss_test.append(batch_loss.item())
 
@@ -307,7 +309,8 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_river_14m_val_0776.zip")
+    model.load_from_checkpoint("./models/bert_train_002m_val_0644.zip") 
+    #model.load_from_checkpoint("./models/bert_river_14m_val_0776.zip") 
 
     do_train = True
 
