@@ -15,17 +15,17 @@ DATETIME_FORMAT = "%m-%d-%Y_%H:%M"
 
 EPOCHS = 20
 LEARNING_RATE = 1e-5
-CLAMP_LOSS = True
+CLAMP_LOSS = False
+CLAMP_LOSS_TH = 3
+VALIDATION_DEVICE = 1
 
-TRAIN_ROWS = 10*1024*1024 # 10 miliona
-TEST_ROWS = 128*1024
-
-TRAIN_ROWS = 2*1024*1024
+TRAIN_ROWS = 1*1024*1024
 TEST_ROWS = 192*1024
 
 # At least 512 to get gain from parallelization
 BATCH_SIZE = 1024
 MINI_BATCH_SIZE = 4
+MINI_BATCH_VAL_SIZE = 4
 
 TRAIN_STREET = 0 # River
 
@@ -37,11 +37,14 @@ def forward_pass(model, input_data, correct_label, device, mini_batch_size):
     output = model(input_data, device)
 
     criterion = torch.nn.MSELoss(reduction = 'none')
+    #criterion = torch.nn.BCELoss(reduction = 'none') # Binary cross entropy
+    #criterion = torch.nn.HingeEmbeddingLoss(reduction = 'none')
+
     batch_loss = criterion(output, correct_label.float())
 
     # Clamp to -1 - 1
     if CLAMP_LOSS:
-        batch_loss = torch.clamp(batch_loss, min=-1, max=1)
+        batch_loss = torch.clamp(batch_loss, min=-CLAMP_LOSS_TH, max=CLAMP_LOSS_TH)
 
     # Average across mini batch
     batch_loss = batch_loss.sum() / mini_batch_size
@@ -240,12 +243,11 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
         torch.save(model.state_dict(), model_name)
 
         # Copy model to cuda device for validation
-        validation_dev = 0
-        model.to(validation_dev)
+        model.to(VALIDATION_DEVICE)
 
         # Run validation
         logger.info(f"Running validation")
-        val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=MINI_BATCH_SIZE)
+        val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=MINI_BATCH_VAL_SIZE)
 
         total_loss_val = []
         total_acc_val = []
@@ -254,7 +256,7 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
             for val_input, val_label, _ in tqdm(val_dataloader):
 
                 batch_loss, acc, _ = forward_pass(
-                    model, val_input, val_label, validation_dev, MINI_BATCH_SIZE
+                    model, val_input, val_label, VALIDATION_DEVICE, MINI_BATCH_VAL_SIZE
                 )
 
                 total_loss_val.append(batch_loss.item())
@@ -272,7 +274,7 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
 
 def evaluate(model, test):
 
-    device = torch.device("cuda:0")
+    device = torch.device(f"cuda:{VALIDATION_DEVICE}")
     test_dataloader = torch.utils.data.DataLoader(test, batch_size=1)
 
     model = model.to(device)
@@ -288,7 +290,7 @@ def evaluate(model, test):
 
             run_inference_result = model.run_inference(train_text, device)
 
-            #logger.info(f"Input: {train_text}")
+            logger.info(f"Input: {train_text}")
             logger.info(f"correct_label {test_label.item()} -> predicted label {out_label.item(): .3f} : run_inference_result {run_inference_result: .3f}, loss {batch_loss.item(): .3f}, acc {acc: .3f} ")
 
     logger.info(f"Test Accuracy: {mean(total_acc_test): .3f}")
@@ -309,7 +311,8 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_train_002m_val_0644.zip") 
+    model.load_from_checkpoint("./models/bert_02-05-2023_17:57.zip")
+    #model.load_from_checkpoint("./models/bert_train_002m_val_0644.zip") 
     #model.load_from_checkpoint("./models/bert_river_14m_val_0776.zip") 
 
     do_train = True

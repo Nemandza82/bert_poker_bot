@@ -29,6 +29,9 @@ class BertPokerValueModel(torch.nn.Module):
 
         dropout_output = self.dropout(pooled_output)
         linear_output = self.linear(dropout_output)
+        
+        # Add tanh for classification
+        #final_layer = torch.tanh(linear_output)
         final_layer = linear_output
 
         return final_layer

@@ -203,9 +203,9 @@ class AcpcLogHand:
         # print(f"{hero_res}, {text}")
         # print(f"Player {player} pot: {hero_pot}")
 
-        # We are not learning what happens when someone folds (we know that)
-        if last_action_type == ACTION_FOLD:
-            return None, None, None
+        # We want folds in dataset, we can decide what to do with that later...
+        # if last_action_type == ACTION_FOLD:
+        #    return None, None, None
 
         # print(text)
         # print(f"{hero} earns {hero_res}")
@@ -270,6 +270,7 @@ def parse_acpc_log_file(filename, train_f, val_f, test_f):
 def convert_logs_to_dataset(root_folder):
     total_examples = 0
     total_examples_per_street = [0, 0, 0, 0]
+    total_files_parsed = 0
 
     with open("acpc_train.txt", "w") as train_f:
         with open("acpc_val.txt", "w") as val_f:
@@ -280,7 +281,8 @@ def convert_logs_to_dataset(root_folder):
 
                 for filename in os.listdir(root_folder):
                     if filename.endswith(".log"):
-                        print(f"Parsing {root_folder}{filename} ")
+                        print(f"Parsing {total_files_parsed} {root_folder}{filename} ")
+                        total_files_parsed += 1
 
                         examples, examples_per_street = parse_acpc_log_file(
                             f"{root_folder}{filename}", train_f, val_f, test_f
