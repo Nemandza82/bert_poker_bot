@@ -117,7 +117,6 @@ class AcpcDataset(torch.utils.data.Dataset):
         #if x != 0:
         #    x = -1 if x < 0 else 1
 
-        #return np.array(math.tanh(x))
         return np.array(x)
 
     def get_batch_texts(self, idx):

@@ -26,8 +26,14 @@ TEST_ROWS = 192*1024
 BATCH_SIZE = 1024
 MINI_BATCH_SIZE = 4
 MINI_BATCH_VAL_SIZE = 4
+MINI_BATCH_TEST_SIZE = 1
 
-TRAIN_STREET = 0 # River
+DO_TRAIN = True
+MODEL_CHECKPOINT = "./models/bert_train_002m_val_0644.zip"
+# MODEL_CHECKPOINT = "./models/bert_river_14m_val_0776.zip"
+TRAIN_STREET = 0
+
+PRINT_INFERENCE = True
 
 
 def forward_pass(model, input_data, correct_label, device, mini_batch_size):
@@ -36,9 +42,10 @@ def forward_pass(model, input_data, correct_label, device, mini_batch_size):
 
     output = model(input_data, device)
 
-    criterion = torch.nn.MSELoss(reduction = 'none')
-    #criterion = torch.nn.BCELoss(reduction = 'none') # Binary cross entropy
-    #criterion = torch.nn.HingeEmbeddingLoss(reduction = 'none')
+    # criterion = torch.nn.MSELoss(reduction = 'none')
+    criterion = torch.nn.HuberLoss(reduction = 'none')
+    # criterion = torch.nn.BCELoss(reduction = 'none') # Binary cross entropy
+    # criterion = torch.nn.HingeEmbeddingLoss(reduction = 'none')
 
     batch_loss = criterion(output, correct_label.float())
 
@@ -272,26 +279,27 @@ def train(model, train_dataset_path, val_dataset_path, epochs):
         model.to(torch.device("cpu"))
 
 
-def evaluate(model, test):
+def evaluate(model, test, print_inference=True):
 
     device = torch.device(f"cuda:{VALIDATION_DEVICE}")
-    test_dataloader = torch.utils.data.DataLoader(test, batch_size=1)
+    test_dataloader = torch.utils.data.DataLoader(test, batch_size=MINI_BATCH_TEST_SIZE)
 
     model = model.to(device)
     total_acc_test = []
     total_loss_test = []
 
     with torch.no_grad():
-        for test_input, test_label, train_text in test_dataloader:
+        for test_input, test_label, train_text in tqdm(test_dataloader):
 
-            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, device, 1)
+            batch_loss, acc, out_label = forward_pass(model, test_input, test_label, device, MINI_BATCH_TEST_SIZE)
             total_acc_test.append(acc)
             total_loss_test.append(batch_loss.item())
 
-            run_inference_result = model.run_inference(train_text, device)
+            if print_inference:
+                run_inference_result = model.run_inference(train_text, device)
 
-            logger.info(f"Input: {train_text}")
-            logger.info(f"correct_label {test_label.item()} -> predicted label {out_label.item(): .3f} : run_inference_result {run_inference_result: .3f}, loss {batch_loss.item(): .3f}, acc {acc: .3f} ")
+                logger.info(f"Input: {train_text}")
+                logger.info(f"correct_label {test_label.item()} -> predicted label {out_label.item(): .3f} : run_inference_result {run_inference_result: .3f}, loss {batch_loss.item(): .3f}, acc {acc: .3f} ")
 
     logger.info(f"Test Accuracy: {mean(total_acc_test): .3f}")
     logger.info(f"Test Loss: {mean(total_loss_test): .3f}")
@@ -311,17 +319,13 @@ if __name__ == "__main__":
 
     # Train the model
     model = BertPokerValueModel() 
-    model.load_from_checkpoint("./models/bert_02-05-2023_17:57.zip")
-    #model.load_from_checkpoint("./models/bert_train_002m_val_0644.zip") 
-    #model.load_from_checkpoint("./models/bert_river_14m_val_0776.zip") 
+    model.load_from_checkpoint(MODEL_CHECKPOINT)
 
-    do_train = True
-
-    if do_train:
+    if DO_TRAIN:
         logger.info("Started training process")
         train(model, "data/acpc_train.txt", "data/acpc_val.txt", EPOCHS)
 
     # Evaluate model
     test_df = load_random_df("data/acpc_test.txt", TEST_ROWS, TRAIN_STREET)
     test = AcpcDataset(test_df, model)
-    evaluate(model, test)
+    evaluate(model, test, print_inference=PRINT_INFERENCE)
