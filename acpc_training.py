@@ -19,7 +19,7 @@ CLAMP_LOSS = False
 CLAMP_LOSS_TH = 3
 VALIDATION_DEVICE = 1
 
-TRAIN_ROWS = 1*1024*1024
+TRAIN_ROWS = 2*1024*1024
 TEST_ROWS = 192*1024
 
 # At least 512 to get gain from parallelization
@@ -31,7 +31,7 @@ MINI_BATCH_TEST_SIZE = 1
 DO_TRAIN = True
 MODEL_CHECKPOINT = "./models/bert_train_002m_val_0644.zip"
 # MODEL_CHECKPOINT = "./models/bert_river_14m_val_0776.zip"
-TRAIN_STREET = 0
+TRAIN_STREET = 3
 
 PRINT_INFERENCE = True
 
@@ -42,8 +42,8 @@ def forward_pass(model, input_data, correct_label, device, mini_batch_size):
 
     output = model(input_data, device)
 
-    # criterion = torch.nn.MSELoss(reduction = 'none')
-    criterion = torch.nn.HuberLoss(reduction = 'none')
+    criterion = torch.nn.MSELoss(reduction = 'none')
+    # criterion = torch.nn.HuberLoss(reduction = 'none')
     # criterion = torch.nn.BCELoss(reduction = 'none') # Binary cross entropy
     # criterion = torch.nn.HingeEmbeddingLoss(reduction = 'none')
 
@@ -318,7 +318,7 @@ if __name__ == "__main__":
     logger.info(f"Dev count {torch.cuda.device_count()}")
 
     # Train the model
-    model = BertPokerValueModel() 
+    model = BertPokerValueModel(TRAIN_STREET) 
     model.load_from_checkpoint(MODEL_CHECKPOINT)
 
     if DO_TRAIN:

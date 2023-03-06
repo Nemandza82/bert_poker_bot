@@ -8,11 +8,12 @@ Input is sentance describing poker hand state. Output is tanh of learned multipl
 Hero input money in pot.
 """
 class BertPokerValueModel(torch.nn.Module):
-    def __init__(self, dropout=0.5):
+    def __init__(self, street, dropout=0.5):
         super(BertPokerValueModel, self).__init__()
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
-
+        self.street = street
+        
         self.bert = BertModel.from_pretrained("bert-base-cased")
         self.dropout = torch.nn.Dropout(dropout)
         self.linear = torch.nn.Linear(768, 1)
@@ -54,10 +55,19 @@ class BertPokerValueModel(torch.nn.Module):
 
     def tokenize(self, text):
 
+        if self.street == 0:
+            max_length = 64
+        elif self.street == 1:
+            max_length = 128
+        elif self.street == 2:
+            max_length = 160
+        else:
+            max_length = 192
+
         return self.tokenizer(
             text,
             padding="max_length",
-            max_length=512,
+            max_length=max_length,
             truncation=True,
             return_tensors="pt",
         )
